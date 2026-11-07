@@ -74,6 +74,15 @@ python editor.py
 or double-click **FEFW Save Editor.bat** on Windows. Python 3.10+. You can also
 pass a save folder (or any slot file in it): `python editor.py "C:\path\to\save"`.
 
+Use the **中文 / English** button in the top-right corner to switch the entire
+interface between English and Simplified Chinese. The selected language is
+remembered for the next launch.
+The item catalogue supports Chinese names and search for all items shown by
+default. Some names are unofficial translations, including labels for internal
+monster attacks. Additional entries shown by **Internal duplicates** may still
+use their original names. English, Japanese and item ID searches work in either
+language.
+
 ## Finding your save
 
 ```
@@ -178,6 +187,10 @@ PNGs into `icons/items/` and `icons/units/` to use real images; see
 ```
 editor.py            the GUI
 editor_advanced.py   Arts & skills, Player, Classes, Supports, Flags and Mounts pages
+item_names_zh.py     Simplified Chinese item names and forge-level handling
+class_names_zh.py    Simplified Chinese class names keyed by Japanese class IDs
+unit_names_zh.py     Simplified Chinese names for identified characters
+skill_names_zh.py    Simplified Chinese combat art and skill names
 fefw_core.py         the save's record tree: blocks, units, resizing edits, convoy, mounts, flags
 fefw_layer.py        what the GUI uses: units, items, skills, convoy and gold through fefw_core
 fefw_save.py         save container (decompress, checksums, write), ids and labels, small CLI

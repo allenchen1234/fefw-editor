@@ -7,3 +7,4 @@ editor_settings.json
 build/
 dist/
 *.spec
+.venv/*

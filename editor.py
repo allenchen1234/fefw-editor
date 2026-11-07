@@ -35,6 +35,10 @@ from fefw_layer import (GRADES, ITEM_KINDS, SKILL_NAMES, SKILL_THRESHOLDS,  # no
 import fefw_layer as layer  # noqa: E402
 import supports  # noqa: E402  (support pair chart + conversation flags)
 import fefw_core as core  # noqa: E402  (save object tree: resizing edits)
+import i18n  # noqa: E402  (English / Simplified Chinese interface)
+import item_names_zh  # noqa: E402
+import class_names_zh  # noqa: E402
+import unit_names_zh  # noqa: E402
 from editor_advanced import AdvancedMixin  # noqa: E402  (Player / Classes / Flags pages)
 
 APP_NAME = "Fortune's Weave Save Editor"
@@ -108,7 +112,7 @@ def _name_color(name: str) -> str:
 def _fmt_time(ts: float) -> str:
     now = time.time()
     if now - ts < 86400 and time.localtime(now).tm_mday == time.localtime(ts).tm_mday:
-        return "today " + time.strftime("%H:%M", time.localtime(ts))
+        return i18n.tr("today ") + time.strftime("%H:%M", time.localtime(ts))
     return time.strftime("%b %d %H:%M", time.localtime(ts))
 
 
@@ -125,7 +129,8 @@ class SearchEntry(ttk.Entry):
     def __init__(self, master, placeholder: str, on_change, delay: int = 140, **kw):
         self._var = tk.StringVar()
         super().__init__(master, textvariable=self._var, **kw)
-        self._ph = placeholder
+        self._source_ph = placeholder
+        self._ph = i18n.tr(placeholder)
         self._on_change = on_change
         self._delay = delay
         self._job = None
@@ -166,6 +171,13 @@ class SearchEntry(ttk.Entry):
         self._var.set("")
         if self.focus_get() is not self:
             self._show_ph()
+
+    def refresh_i18n(self):
+        """Update the placeholder immediately when the interface language changes."""
+        showing = self._showing_ph
+        self._ph = i18n.tr(self._source_ph)
+        if showing:
+            self._var.set(self._ph)
 
 
 class Bar(tk.Canvas):
@@ -266,7 +278,7 @@ class ItemPicker(ttk.Frame):
         row = ttk.Frame(self, style="Card.TFrame")
         row.pack(fill="x")
         ttk.Label(row, text="Type", style="CardMuted.TLabel").pack(side="left")
-        self.kind_var = tk.StringVar(value="All types")
+        self.kind_var = tk.StringVar(value=i18n.tr("All types"))
         kb = ttk.Combobox(row, textvariable=self.kind_var, state="readonly", width=14,
                           values=["All types"] + ITEM_KINDS)
         kb.pack(side="left", padx=(6, 12))
@@ -309,6 +321,11 @@ class ItemPicker(ttk.Frame):
             self.tree.focus(kids[0])
         return "break"
 
+    def refresh_i18n(self):
+        """Keep the type filter's displayed choice in the selected language."""
+        self.kind_var.set(i18n.tr(i18n.source(self.kind_var.get())))
+        self.refresh()
+
     def _activate(self):
         iid = self.selected()
         if iid is None:
@@ -339,20 +356,22 @@ class ItemPicker(ttk.Frame):
     def refresh(self):
         q = self.search.get_query().lower()
         tokens = q.split()
-        kind = self.kind_var.get()
+        kind = i18n.source(self.kind_var.get())
         show_internal = self.app.show_internal.get()
         hits = []
         for row in self.app.item_rows:
             iid, meta, en, jp, k, cat, shadow, blob = row
+            zh = item_names_zh.chinese_name(en, meta) or ""
             if shadow and not show_internal:
                 continue
             if kind != "All types" and k != kind:
                 continue
             if self.lock_category and cat != self.lock_category:
                 continue
-            if tokens and not all(t in blob for t in tokens):
+            if tokens and not all(t in (blob + " " + zh.lower()) for t in tokens):
                 continue
-            el = en.lower()
+            label = item_names_zh.display_name(en, meta, i18n.get_language() == "zh_CN")
+            el = label.lower()
             if not q:
                 score = 3
             elif el == q or f"{iid:08x}" == q:
@@ -368,7 +387,8 @@ class ItemPicker(ttk.Frame):
         prev = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
         for _s, _el, (iid, meta, en, jp, k, cat, shadow, blob) in hits[:self.MAX_ROWS]:
-            self.tree.insert("", "end", iid=f"{iid:08x}", text=" " + en,
+            label = item_names_zh.display_name(en, meta, i18n.get_language() == "zh_CN")
+            self.tree.insert("", "end", iid=f"{iid:08x}", text=" " + label,
                              image=self.app.item_icon(iid, meta, k),
                              values=(k, jp, f"{iid:08x}"))
         if prev and self.tree.exists(prev[0]):
@@ -390,6 +410,9 @@ class App(AdvancedMixin, tk.Tk):
         self.minsize(1000, 640)
 
         self.settings = self._load_settings()
+        i18n.set_language(self.settings.get("language", "en"))
+        i18n.install()
+        self.title(APP_NAME)
         self.p = PALETTES.get(self.settings.get("theme"), PALETTES["dark"])
         self.style = ttk.Style(self)
         self._canvases: list[tk.Canvas] = []
@@ -448,7 +471,7 @@ class App(AdvancedMixin, tk.Tk):
     def _save_settings(self):
         self.settings.update(theme=self.theme_name(), mirror_route=bool(self.mirror.get()),
                              show_enemies=bool(self.show_enemies.get()),
-                             last_folder=self.folder)
+                             last_folder=self.folder, language=i18n.get_language())
         try:
             with open(SETTINGS_PATH, "w", encoding="utf8") as fh:
                 json.dump(self.settings, fh, indent=1)
@@ -697,6 +720,27 @@ class App(AdvancedMixin, tk.Tk):
         self.theme_btn.configure(text="☀" if self.theme_name() == "dark" else "☾")
         self._save_settings()
 
+    def toggle_language(self):
+        """Switch between English and Simplified Chinese without restarting."""
+        i18n.set_language("zh_CN" if i18n.get_language() == "en" else "en")
+        i18n.refresh(self)
+        self.language_btn.configure(text="English" if i18n.get_language() == "zh_CN" else "中文")
+        # Recreate generated rows/status text in the newly selected language.
+        self.refresh_units(keep=self.uid)
+        current_unit = self._current()
+        if current_unit is not None:
+            self.unit_name.configure(text=unit_names_zh.display_name(
+                current_unit.name, current_unit.pid, chinese=i18n.get_language() == "zh_CN"))
+        self.refresh_inventory()
+        self.refresh_skill_lists()
+        self.refresh_classes()
+        self.refresh_convoy()
+        self.refresh_supports()
+        self.refresh_core_pages()
+        self.refresh_mounts()
+        self._update_dirty()
+        self._save_settings()
+
     def register_canvas(self, c):
         self._canvases.append(c)
 
@@ -787,6 +831,10 @@ class App(AdvancedMixin, tk.Tk):
         self.theme_btn = ttk.Button(right, text="☀" if self.theme_name() == "dark" else "☾",
                                     width=3, style="Icon.TButton", command=self.toggle_theme)
         self.theme_btn.pack(side="right", padx=(8, 0))
+        self.language_btn = ttk.Button(
+            right, text="English" if i18n.get_language() == "zh_CN" else "中文",
+            style="Small.TButton", command=self.toggle_language)
+        self.language_btn.pack(side="right", padx=(8, 0))
         self.save_btn = ttk.Button(right, text="Save", style="Accent.TButton",
                                    command=self.save_all)
         self.save_btn.pack(side="right", padx=(8, 0))
@@ -1269,21 +1317,27 @@ class App(AdvancedMixin, tk.Tk):
             return
         q = self.sup_search.get_query().strip().lower()
         party = self._party_pids() if (self.sv and self.sup_party_only.get()) else None
+        old_selection = self.sup_char_tree.selection()
+        old_rows = getattr(self, "_sup_rows", {})
+        old_jp = old_rows.get(old_selection[0], (None,))[0] if old_selection else None
         self.sup_char_tree.delete(*self.sup_char_tree.get_children())
         self._sup_rows = {}
         first = None
         n = 0
         for jp, rec in supports.chars():
             en = rec["en"] or jp
-            if q and q not in en.lower() and q not in jp.lower():
+            zh = unit_names_zh.chinese_name(en, japanese=jp) or ""
+            if q and q not in en.lower() and q not in jp.lower() and q not in zh.lower():
                 continue
             if party is not None and ("PID_" + jp) not in party:
                 continue
-            iid = self.sup_char_tree.insert("", "end", text=en,
+            label = unit_names_zh.display_name(en, japanese=jp, chinese=i18n.get_language() == "zh_CN")
+            iid = self.sup_char_tree.insert("", "end", text=label,
                                             values=(len(rec["partners"]),))
             self._sup_rows[iid] = (jp, rec)
             n += 1
-            first = first or iid
+            if first is None or jp == old_jp:
+                first = iid
         self.sup_count.configure(text=f"{n} character{'s' if n != 1 else ''}"
                                        + (" in this save" if party is not None else ""))
         if first:
@@ -1301,7 +1355,8 @@ class App(AdvancedMixin, tk.Tk):
             return
         jp, rec = rows[sel[0]]
         en = rec["en"] or jp
-        self.sup_name.configure(text=en)
+        label = unit_names_zh.display_name(en, japanese=jp, chinese=i18n.get_language() == "zh_CN")
+        self.sup_name.configure(text=label)
         self.sup_avatar.show(en, "PID_" + jp)
 
         present = self._support_flags()
@@ -1317,12 +1372,15 @@ class App(AdvancedMixin, tk.Tk):
             if pa["max"] in supports.RANKS:
                 if not best or supports.RANKS.index(pa["max"]) > supports.RANKS.index(best):
                     best = pa["max"]
-            iid = self.sup_tree.insert("", "end", text=pa["en"] or pa["jp"],
+            partner_en = pa["en"] or pa["jp"]
+            partner_label = unit_names_zh.display_name(partner_en, japanese=pa["jp"],
+                                                       chinese=i18n.get_language() == "zh_CN")
+            iid = self.sup_tree.insert("", "end", text=partner_label,
                                        values=(pa["jp"], pa["max"] or "—",
                                                ", ".join(got) if got else "—",
                                                "✓" if ("PID_" + pa["jp"]) in party else ""),
                                        tags=("sup_seen",) if got else ("sup_none",))
-            self._sup_pairs[iid] = ({"a_en": en, "b_en": pa["en"] or pa["jp"]},
+            self._sup_pairs[iid] = ({"a_en": label, "b_en": partner_label},
                                     dict(pa.get("flags") or {}))
         self._paint_support_tags()
         self.sup_sub.configure(
@@ -1753,9 +1811,13 @@ class App(AdvancedMixin, tk.Tk):
             enemy = is_enemy(u)
             if enemy and not self.show_enemies.get():
                 continue
-            if q and q not in f"{u.name} {u.pid} {u.job}".lower():
+            zh_job = class_names_zh.chinese_name(job_ids().get(u.job_hash)) or ""
+            zh_name = unit_names_zh.chinese_name(u.name, u.pid) or ""
+            jp_name = unit_names_zh.japanese_name(u.name, u.pid)
+            if q and q not in f"{u.name} {u.pid} {zh_name} {jp_name} {u.job} {zh_job}".lower():
                 continue
-            tree.insert("", "end", iid=str(u.uid), text=" " + u.name,
+            label = unit_names_zh.display_name(u.name, u.pid, chinese=i18n.get_language() == "zh_CN")
+            tree.insert("", "end", iid=str(u.uid), text=" " + label,
                         image=self._dot(_name_color(u.name), 10),
                         values=(u.level,), tags=("enemy",) if enemy else ())
             shown += 1
@@ -1800,6 +1862,10 @@ class App(AdvancedMixin, tk.Tk):
         recs = [r for r in self.sv.units if r.uid == self.uid]
         return pick_live(recs) if recs else None
 
+    def _unit_label(self, unit):
+        return unit_names_zh.display_name(unit.name, unit.pid,
+                                          chinese=i18n.get_language() == "zh_CN")
+
     def on_unit_select(self, _e=None):
         sel = self.unit_tree.selection()
         if not sel:
@@ -1816,9 +1882,12 @@ class App(AdvancedMixin, tk.Tk):
             self._clear_unit_form()
             return
         self.avatar.show(u.name, u.pid)
-        self.unit_name.configure(text=u.name)
+        self.unit_name.configure(text=unit_names_zh.display_name(
+            u.name, u.pid, chinese=i18n.get_language() == "zh_CN"))
         pid = u.pid.replace("PID_", "")
-        self.unit_sub.configure(text=f"{u.job}   ·   Level {u.level}   ·   {pid}")
+        class_name = class_names_zh.display_name(job_ids().get(u.job_hash), u.job,
+                                                 i18n.get_language() == "zh_CN")
+        self.unit_sub.configure(text=f"{class_name}   ·   Level {u.level}   ·   {pid}")
         # what the form shows; a field only writes when it differs from this, so
         # tabbing through fields never copies untouched values into other slots
         self._shown = {"lvl": u.level, "exp": u.exp, **dict(enumerate(u.stats))}
@@ -1833,7 +1902,7 @@ class App(AdvancedMixin, tk.Tk):
         self._update_copies_chip(u)
         self.refresh_skills()
         self.refresh_inventory()
-        self.class_now.configure(text=u.job)
+        self.class_now.configure(text=class_name)
         self.refresh_classes()
 
     def _update_copies_chip(self, u):
@@ -1846,7 +1915,7 @@ class App(AdvancedMixin, tk.Tk):
             self.copies_chip.configure(text="🔒 Enemy / NPC — read-only", style="ChipWarn.TLabel")
         else:
             self.copies_chip.configure(
-                text=f"live record · {u.job}", style="Chip.TLabel")
+                text=f"live record · {class_names_zh.display_name(job_ids().get(u.job_hash), u.job, i18n.get_language() == 'zh_CN')}", style="Chip.TLabel")
 
 
     def _num(self, var, lo, hi):
@@ -1889,9 +1958,11 @@ class App(AdvancedMixin, tk.Tk):
         n, s = self._edit_units(fn)
         if n:
             self._tree_lv(u.uid, v)
-            self.unit_sub.configure(text=f"{u.job}   ·   Level {v}   ·   {u.pid.replace('PID_', '')}")
+            class_name = class_names_zh.display_name(job_ids().get(u.job_hash), u.job,
+                                                     i18n.get_language() == "zh_CN")
+            self.unit_sub.configure(text=f"{class_name}   ·   Level {v}   ·   {u.pid.replace('PID_', '')}")
             self._update_copies_chip(u)
-            self.flash(f"{u.name}: level → {v}  ({self._where(n, s)})")
+            self.flash(f"{self._unit_label(u)}: level → {v}  ({self._where(n, s)})")
 
     def commit_exp(self):
         u = self._current()
@@ -1913,7 +1984,7 @@ class App(AdvancedMixin, tk.Tk):
         self.exp_bar.set(min(v, 100) / 100)
         if n:
             self._update_copies_chip(u)
-            self.flash(f"{u.name}: EXP → {v}  ({self._where(n, s)})")
+            self.flash(f"{self._unit_label(u)}: EXP → {v}  ({self._where(n, s)})")
 
     def commit_stat(self, i: int):
         u = self._current()
@@ -1941,7 +2012,7 @@ class App(AdvancedMixin, tk.Tk):
             bar.set(u.stats[k] / top)
         if n:
             self._update_copies_chip(u)
-            self.flash(f"{u.name}: {STAT_LONG[STAT_NAMES[i]]} → {v}  ({self._where(n, s)})")
+            self.flash(f"{self._unit_label(u)}: {STAT_LONG[STAT_NAMES[i]]} → {v}  ({self._where(n, s)})")
 
     @staticmethod
     def _move_max_hp(r, sv, delta: int):
@@ -1974,7 +2045,7 @@ class App(AdvancedMixin, tk.Tk):
         self._shown = {"lvl": lv, "exp": ex, **dict(enumerate(stats))}
         self._tree_lv(u.uid, lv)
         self._update_copies_chip(u)
-        self.flash(f"{u.name}: every copy now matches the values shown ({self._where(n, s)})",
+        self.flash(f"{self._unit_label(u)}: every copy now matches the values shown ({self._where(n, s)})",
                    "ok")
 
     # ---------------------------------------------------------- ranks
@@ -2007,7 +2078,9 @@ class App(AdvancedMixin, tk.Tk):
         for n, (_off, iid, _tag) in enumerate(inv.items):
             meta = names.get(iid, {})
             kind = item_kind(meta) if meta else "Item"
-            tree.insert("", "end", iid=f"i{n}", text=f" {n + 1}.  {item_label(iid, meta)}",
+            label = item_names_zh.display_name(item_label(iid, meta), meta,
+                                               i18n.get_language() == "zh_CN")
+            tree.insert("", "end", iid=f"i{n}", text=f" {n + 1}.  {label}",
                         image=self.item_icon(iid, meta, kind), values=(kind,))
         if not inv.items:
             tree.insert("", "end", iid="none", text="  Carrying nothing", tags=("empty",))
@@ -2016,7 +2089,9 @@ class App(AdvancedMixin, tk.Tk):
                         tags=("header",))
             for n, (_off, iid, _tag) in enumerate(inv.spells):
                 meta = names.get(iid, {})
-                tree.insert("", "end", iid=f"s{n}", text="      " + item_label(iid, meta),
+                label = item_names_zh.display_name(item_label(iid, meta), meta,
+                                                   i18n.get_language() == "zh_CN")
+                tree.insert("", "end", iid=f"s{n}", text="      " + label,
                             image=self._dot(KIND_COLORS["Tome"]), values=("Spell",),
                             tags=("empty",))
         if prev and tree.exists(prev[0]) and prev[0].startswith("i"):
@@ -2058,7 +2133,7 @@ class App(AdvancedMixin, tk.Tk):
             return
         self._touch(self._targets())
         self.refresh_inventory()
-        self.flash(f"{u.name}: slot {idx + 1} → {item_label(new_id)}")
+        self.flash(f"{self._unit_label(u)}: slot {idx + 1} → {item_label(new_id)}")
 
     def add_item(self):
         u = self._current()
@@ -2076,7 +2151,7 @@ class App(AdvancedMixin, tk.Tk):
             sv._core_cache = None
         self._touch(self._targets())
         self.refresh_inventory()
-        self.flash(f"{u.name}: added {item_label(new_id)}")
+        self.flash(f"{self._unit_label(u)}: added {item_label(new_id)}")
 
     def remove_item(self):
         idx = self._inv_slot()
@@ -2091,7 +2166,7 @@ class App(AdvancedMixin, tk.Tk):
             sv._core_cache = None
         self._touch(self._targets())
         self.refresh_inventory()
-        self.flash(f"{u.name}: removed the item in slot {idx + 1}")
+        self.flash(f"{self._unit_label(u)}: removed the item in slot {idx + 1}")
 
 
     # ----------------------------------------------------------- class
@@ -2110,9 +2185,11 @@ class App(AdvancedMixin, tk.Tk):
             jp = (m.get("jp") or "").replace("JID_", "")
             if not en and not show_all:
                 continue
-            if q and q not in f"{en} {jp} {h:08x}".lower():
+            zh = class_names_zh.chinese_name(m) or ""
+            if q and q not in f"{en} {jp} {zh} {h:08x}".lower():
                 continue
-            rows.append((en.lower() or "~" + jp, h, en or f"({jp})", jp))
+            label = class_names_zh.display_name(m, en or f"({jp})", i18n.get_language() == "zh_CN")
+            rows.append((label.lower(), h, label, jp))
         rows.sort()
         for _k, h, en, jp in rows:
             tree.insert("", "end", iid=f"{h:08x}", text=("✓  " if h == cur else "    ") + en,
@@ -2130,18 +2207,25 @@ class App(AdvancedMixin, tk.Tk):
         if self._read_only():
             return
         new_hash = int(sel[0], 16)
+        chinese = i18n.get_language() == "zh_CN"
+        current_name = class_names_zh.display_name(job_ids().get(u.job_hash), u.job, chinese)
         if new_hash == u.job_hash:
-            self.flash(f"{u.name} is already a {u.job}.")
+            self.flash(f"{self._unit_label(u)}已经是{current_name}。" if chinese
+                       else f"{u.name} is already a {u.job}.")
             return
-        name = job_name(new_hash)
+        name = class_names_zh.display_name(job_ids().get(new_hash), job_name(new_hash), chinese)
         n = len(self._targets())
         scope = f"{n} saves of this route" if n > 1 else "this slot"
-        if not messagebox.askyesno(
-                "Change class",
+        prompt = (f"将{self._unit_label(u)}的兵种从{current_name}更改为{name}，"
+                  + (f"应用到本路线的 {n} 个存档？" if n > 1 else "应用到此存档槽？")
+                  + "\n\n只写入兵种 ID，移动力、可用武器、兵种技能和最大 HP 不会重新计算。"
+                    "点击保存前不会写入磁盘。") if chinese else (
                 f"Change {u.name} from {u.job} to {name} in {scope}?\n\n"
                 "Only the class id is written. Movement, usable weapons, class skills and "
-                "max HP are not recalculated. Nothing hits the disk until you Save.",
-                parent=self):
+                "max HP are not recalculated. Nothing hits the disk until you Save.")
+        if not messagebox.askyesno(
+                "Change class",
+                prompt, parent=self):
             return
         touched, ids = [], 0
         for sv in self._targets():
@@ -2150,7 +2234,7 @@ class App(AdvancedMixin, tk.Tk):
                 ids += hit
                 touched.append(sv)
         self._touch(touched)
-        self.flash(f"{u.name}: class → {name}  ({ids} ids in {len(touched)} slot(s))")
+        self.flash(f"{self._unit_label(u)}: class → {name}  ({ids} ids in {len(touched)} slot(s))")
         self.show_unit()
 
     # ========================================================== convoy
@@ -2169,8 +2253,10 @@ class App(AdvancedMixin, tk.Tk):
         for row in self._conv_rows:
             meta = names.get(row.iid, {})
             kind = item_kind(meta) if meta else "Item"
-            label = item_label(row.iid, meta)
-            if q and not all(t in f"{label} {meta.get('jp', '')} {kind}".lower()
+            english = item_label(row.iid, meta)
+            zh = item_names_zh.chinese_name(english, meta) or ""
+            label = item_names_zh.display_name(english, meta, i18n.get_language() == "zh_CN")
+            if q and not all(t in f"{label} {english} {zh} {meta.get('jp', '')} {kind}".lower()
                              for t in q.split()):
                 continue
             tree.insert("", "end", iid=str(row.slot), text=f" {row.slot + 1:>4} · {label}",

@@ -17,6 +17,11 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import fefw_core as core
+import i18n
+import item_names_zh
+import class_names_zh
+import unit_names_zh
+import skill_names_zh
 from fefw_save import item_ids, item_label, unit_ids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +64,8 @@ def friendly(name: str) -> str:
     for prefix, en in PREFIX_EN:
         if name.startswith(prefix):
             rest = name[len(prefix):]
-            return f"{en} · {rest}" if rest else en
+            label = i18n.tr(en)
+            return f"{label} · {rest}" if rest else label
     return name
 
 _JOBS = None
@@ -101,7 +107,8 @@ def class_label(cid: int) -> str:
     meta = jobs().get(cid & 0xFFFFFFFF)
     if not meta:
         return "unknown 0x%08X" % (cid & 0xFFFFFFFF)
-    return meta.get("en") or meta.get("jp") or "unknown 0x%08X" % (cid & 0xFFFFFFFF)
+    fallback = meta.get("en") or meta.get("jp") or "unknown 0x%08X" % (cid & 0xFFFFFFFF)
+    return class_names_zh.display_name(meta, fallback, i18n.get_language() == "zh_CN")
 
 
 def class_jp(cid: int) -> str:
@@ -110,7 +117,9 @@ def class_jp(cid: int) -> str:
 
 def unit_name(person: int) -> str:
     meta = unit_ids().get(person & 0xFFFFFFFF) or {}
-    return meta.get("name") or meta.get("pid") or "unknown 0x%08X" % (person & 0xFFFFFFFF)
+    name = meta.get("name") or meta.get("pid") or "unknown 0x%08X" % (person & 0xFFFFFFFF)
+    return unit_names_zh.display_name(name, meta.get("pid", ""),
+                                      chinese=i18n.get_language() == "zh_CN")
 
 
 def rank_of(exp: int) -> int:
@@ -310,8 +319,8 @@ class AdvancedMixin:
         self.player_vars["karma"].set(str(f.u32(ud + core.KARMA_AT)))
         st = core.read_settings(f)
         if st:
-            self.diff_var.set(DIFFICULTIES[st[1]] if st[1] < 3 else str(st[1]))
-            self.mode_var.set(MODES[st[2]] if st[2] < 2 else str(st[2]))
+            self.diff_var.set(i18n.tr(DIFFICULTIES[st[1]]) if st[1] < 3 else str(st[1]))
+            self.mode_var.set(i18n.tr(MODES[st[2]]) if st[2] < 2 else str(st[2]))
             self.play_lbl.configure(text=f"Playthrough {st[0]}")
         self.player_note.configure(
             text="Renown exp is the army's total; the level itself follows the game's own "
@@ -347,8 +356,8 @@ class AdvancedMixin:
         if not self.sv or not hasattr(self, "diff_var"):
             return
         try:
-            d = DIFFICULTIES.index(self.diff_var.get())
-            m = MODES.index(self.mode_var.get())
+            d = DIFFICULTIES.index(i18n.source(self.diff_var.get()))
+            m = MODES.index(i18n.source(self.mode_var.get()))
         except ValueError:
             return
 
@@ -503,11 +512,16 @@ class AdvancedMixin:
             meta = unit_ids().get(u.person & 0xFFFFFFFF) or {}
             name = meta.get("name") or meta.get("pid") or "unknown 0x%08X" % (u.person & 0xFFFFFFFF)
             kind = (meta.get("kind") or "char")
-            label = name + ("" if kind == "char" else f"  · {kind}")
-            rows.append((0 if kind == "char" else 1, label.lower(), u.start, label))
+            zh = unit_names_zh.chinese_name(name, meta.get("pid", "")) or ""
+            display = unit_names_zh.display_name(name, meta.get("pid", ""),
+                                                 chinese=i18n.get_language() == "zh_CN")
+            label = display + ("" if kind == "char" else f"  · {kind}")
+            jp = unit_names_zh.japanese_name(name, meta.get("pid", ""))
+            rows.append((0 if kind == "char" else 1,
+                         f"{label} {name} {zh} {jp} {meta.get('pid', '')}".lower(), u.start, label))
         rows.sort()
         for _k, _s, start, label in rows:
-            if q and q not in label.lower():
+            if q and q not in _s:
                 continue
             u = by_start[start]
             lv = f.payload[u.level_off]
@@ -568,8 +582,8 @@ class AdvancedMixin:
     def _class_rows(self):
         rows = []
         for cid, meta in jobs().items():
-            rows.append((cid, meta.get("en") or meta.get("jp") or "unknown",
-                         meta.get("jp", "")))
+            rows.append((cid, class_label(cid),
+                         f"{meta.get('jp', '')} {meta.get('en', '')}"))
         rows.sort(key=lambda r: r[1].lower())
         return rows
 
@@ -1104,6 +1118,18 @@ def _ask_number(parent, title: str, prompt: str, current: int, limit: int):
 import fefw_layer as layer          # noqa: E402
 
 
+def _skill_display(sid: int) -> str:
+    """Localise a skill (or a spell stored in the same list) for display."""
+    sid &= 0xFFFFFFFF
+    fallback = layer.skill_label(sid)
+    if i18n.get_language() != "zh_CN":
+        return fallback
+    item = layer.item_ids().get(sid)
+    if item:
+        return item_names_zh.display_name(fallback, item, True)
+    return skill_names_zh.display_name(layer._skills().get(sid), fallback, True)
+
+
 def _slot_payload(app):
     return app.sv.payload if app.sv else None
 
@@ -1236,19 +1262,24 @@ def refresh_skill_lists(self):
         return
     lists = layer.skill_lists(self.sv.payload, self.uid)
     for idx, tree in self._skill_trees.items():
+        selection = tree.selection()
         tree.delete(*tree.get_children())
         ids = lists[idx] if idx < len(lists) else []
         for k, sid in enumerate(ids):
-            tree.insert("", "end", iid=str(k), text="  " + layer.skill_label(sid))
+            tree.insert("", "end", iid=str(k), text="  " + _skill_display(sid))
         if not ids:
             tree.insert("", "end", iid="none", text="  (empty)", tags=("empty",))
+        if selection and tree.exists(selection[0]):
+            tree.selection_set(selection[0])
 
 
 def add_skill(self, index: int):
     if not self.sv or self.uid is None:
         return
     # every entry in these lists is a skill / combat art id (SID_…), never an item
-    rows = [(h, m.get("en") or m.get("jp") or m.get("sid"), m.get("sid", ""))
+    rows = [(h, skill_names_zh.display_name(m, m.get("en") or m.get("jp") or m.get("sid"),
+                                           i18n.get_language() == "zh_CN"),
+             f"{m.get('jp', '')} · {m.get('en', '')} · {m.get('sid', '')} · {h:08x}")
             for h, m in layer._skills().items()
             if not (m.get("sid") or "").startswith("SID_>") and (m.get("en") or m.get("jp"))]
     # skills with an English name first; internal / enemy-only entries after
@@ -1257,7 +1288,9 @@ def add_skill(self, index: int):
     if not rows:
         self.flash("No skill names available (skill_ids.json is missing).", "warn")
         return
-    sid = self._picker("Add to " + layer.SKILL_LIST_NAMES[index], rows)
+    list_name = layer.SKILL_LIST_NAMES[index]
+    title = ("添加到" + i18n.tr(list_name)) if i18n.get_language() == "zh_CN" else "Add to " + list_name
+    sid = self._picker(title, rows)
     if sid is None:
         return
     self.push_undo()
@@ -1274,7 +1307,7 @@ def add_skill(self, index: int):
             return None
         return core.with_skill_list(g, u, index + 1, ids + [sid])
 
-    self._core_edit(edit, f"{layer.SKILL_LIST_NAMES[index]}: added {layer.skill_label(sid)}")
+    self._core_edit(edit, f"{i18n.tr(list_name)}: added {_skill_display(sid)}")
 
 
 def remove_skill(self, index: int):
@@ -1359,7 +1392,8 @@ def refresh_mounts(self):
         bat = bat_by_unit.get((g.unit_number if g else -1))
         bat_txt = ("Battalion row %d" % bat.row) if bat else "—"
         mnt = ("Mount #%d" % g.ride.serial) if (g and g.ride) else "—"
-        iid = self.mount_tree.insert("", "end", text=u.name,
+        name = unit_names_zh.display_name(u.name, u.pid, chinese=i18n.get_language() == "zh_CN")
+        iid = self.mount_tree.insert("", "end", text=name,
                                      values=(bat_txt, mnt))
         self._mount_rows[iid] = u.uid
     for i, l in enumerate(layer.battalions(self.sv.payload)):
@@ -1452,7 +1486,9 @@ def copy_unit_in(self):
     except Exception as exc:                  # noqa: BLE001
         self.flash(f"Can't read {os.path.basename(pick)}: {exc}", "error")
         return
-    rows = [(u.uid, u.name, f"Lv {u.level} · {u.job}") for u in src.units]
+    rows = [(u.uid, unit_names_zh.display_name(u.name, u.pid, chinese=i18n.get_language() == "zh_CN"),
+             f"Lv {u.level} · {u.job} · {u.name} · {unit_names_zh.japanese_name(u.name, u.pid)} · {u.pid}")
+            for u in src.units]
     rows.sort(key=lambda r: r[1].lower())
     uid = self._picker(f"Copy a unit from {os.path.basename(pick)}", rows)
     if uid is None:
@@ -1471,14 +1507,14 @@ def remove_current_unit(self):
     if u is None:
         return
     if not messagebox.askyesno(
-            APP_NAME, f"Remove {u.name} from this save?\n\n"
+            APP_NAME, f"Remove {self._unit_label(u)} from this save?\n\n"
                       "The game may still refer to them (join flags, battalions, supports), "
                       "which can confuse it. Undo (Ctrl+Z) brings them back; nothing is "
                       "written until you save.", parent=self):
         return
     self.push_undo()
     self._core_edit(lambda f: (layer.remove_unit(f.payload, self.uid) and f.payload) or None,
-                    f"Removed {u.name}")
+                    f"Removed {self._unit_label(u)}")
     self.uid = None
 
 
@@ -1486,7 +1522,10 @@ def remove_current_unit(self):
 def add_convoy_item_ui(self):
     if not self.sv:
         return
-    rows = [(h, layer.item_label(h, m), m.get("jp", "")) for h, m in layer.item_ids().items()]
+    rows = [(h, item_names_zh.display_name(layer.item_label(h, m), m,
+                                           i18n.get_language() == "zh_CN"),
+             f"{m.get('jp', '')} {layer.item_label(h, m)}")
+            for h, m in layer.item_ids().items()]
     rows.sort(key=lambda r: str(r[1]).lower())
     iid = self._picker("Add to the convoy", rows)
     if iid is None:
