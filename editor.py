@@ -42,7 +42,7 @@ import unit_names_zh  # noqa: E402
 from editor_advanced import AdvancedMixin  # noqa: E402  (Player / Classes / Flags pages)
 
 APP_NAME = "Fortune's Weave Save Editor"
-__version__ = "1.2.3"
+__version__ = "1.3.0"
 SETTINGS_PATH = os.path.join(USER_DIR, "editor_settings.json")
 ICON_DIR = os.path.join(USER_DIR, "icons")
 
@@ -406,8 +406,11 @@ class App(AdvancedMixin, tk.Tk):
     def __init__(self, folder: str | None = None):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("1240x780")
-        self.minsize(1000, 640)
+        self.ui_scale = _install_scaling(self)
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = min(self.px(1240), sw - 40), min(self.px(780), sh - 80)
+        self.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 3)}")
+        self.minsize(min(self.px(1000), w), min(self.px(640), h))
 
         self.settings = self._load_settings()
         i18n.set_language(self.settings.get("language", "en"))
@@ -482,6 +485,34 @@ class App(AdvancedMixin, tk.Tk):
         return "light" if self.p is PALETTES["light"] else "dark"
 
     # --------------------------------------------------------------- theme
+    # ------------------------------------------------------------ scaling
+    def px(self, n: float) -> int:
+        """A size given in 96-dpi pixels, in this display's pixels."""
+        return int(round(n * self.ui_scale))
+
+    def pad(self, *v):
+        return tuple(self.px(x) for x in v)
+
+    def _row_height(self) -> int:
+        """Treeview rows sized from the font, not a fixed 28 px, so text and the
+        22 px icons aren't clipped when fonts grow with the display's DPI."""
+        line = tkfont.Font(self, font=self.f_body).metrics("linespace")
+        return max(line + self.px(10), self.px(28), 28)
+
+    def place_dialog(self, win, w: int | None = None, h: int | None = None):
+        """Size a dialog for the display's DPI and centre it over the main window
+        (left alone, Windows opens it small in the screen's top-left corner)."""
+        win.update_idletasks()
+        w = self.px(w) if w else win.winfo_reqwidth()
+        h = self.px(h) if h else win.winfo_reqheight()
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = min(w, sw - 40), min(h, sh - 80)
+        x = self.winfo_rootx() + (self.winfo_width() - w) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - h) // 3
+        x = max(0, min(x, sw - w))
+        y = max(0, min(y, sh - h))
+        win.geometry(f"{w}x{h}+{x}+{y}")
+
     def _fonts(self):
         fam = _pick_family(["Segoe UI Variable Text", "Segoe UI", "Inter", "SF Pro Text",
                             "Helvetica Neue", "Noto Sans", "Cantarell", "DejaVu Sans"],
@@ -611,12 +642,12 @@ class App(AdvancedMixin, tk.Tk):
 
         # lists
         s.configure("Treeview", background=p["card"], fieldbackground=p["card"],
-                    foreground=p["fg"], rowheight=28, borderwidth=0, relief="flat",
+                    foreground=p["fg"], rowheight=self._row_height(), borderwidth=0, relief="flat",
                     font=self.f_body)
         s.map("Treeview", background=[("selected", p["sel"])],
               foreground=[("selected", p["fg"])])
         s.configure("Treeview.Heading", background=p["card"], foreground=p["faint"],
-                    relief="flat", font=self.f_small, padding=(6, 6), borderwidth=0,
+                    relief="flat", font=self.f_small, padding=self.pad(6, 6), borderwidth=0,
                     bordercolor=p["card"], lightcolor=p["card"], darkcolor=p["card"])
         s.map("Treeview.Heading", background=[("active", p["raised"])])
         s.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
@@ -630,14 +661,14 @@ class App(AdvancedMixin, tk.Tk):
         # tabs
         s.configure("TNotebook", background=p["bg"], borderwidth=0, tabmargins=(0, 4, 0, 0))
         s.configure("TNotebook.Tab", background=p["bg"], foreground=p["muted"],
-                    padding=(16, 8), borderwidth=0, font=self.f_bold,
+                    padding=self.pad(16, 8), borderwidth=0, font=self.f_bold,
                     lightcolor=p["bg"], bordercolor=p["bg"])
         s.map("TNotebook.Tab", background=[("selected", p["card"]), ("active", p["raised"])],
               foreground=[("selected", p["fg"]), ("active", p["fg"])],
               lightcolor=[("selected", p["accent"])],
               expand=[("selected", (0, 0, 0, 0))])
         s.configure("Main.TNotebook", background=p["side"], tabmargins=(12, 0, 0, 0))
-        s.configure("Main.TNotebook.Tab", background=p["side"], padding=(20, 10),
+        s.configure("Main.TNotebook.Tab", background=p["side"], padding=self.pad(20, 10),
                     lightcolor=p["side"], bordercolor=p["side"])
         s.map("Main.TNotebook.Tab", background=[("selected", p["bg"]), ("active", p["raised"])],
               lightcolor=[("selected", p["accent"])])
@@ -1211,10 +1242,11 @@ class App(AdvancedMixin, tk.Tk):
         pane.add(side, weight=0)
         top = ttk.Frame(side, style="Card.TFrame")
         top.pack(fill="x")
-        ttk.Label(top, text="Support conversations", style="CardH3.TLabel").pack(side="left")
+        ttk.Label(top, text="Characters", style="CardH3.TLabel").pack(side="left")
         self.sup_count = ttk.Label(top, text="", style="CardMuted.TLabel")
         self.sup_count.pack(side="right")
-        ttk.Label(side, text="Pairs whose C/B/A conversations the game data defines.",
+        ttk.Label(side, text="Every character's supports, with the points this save "
+                             "holds for each pair.",
                   style="CardMuted.TLabel", wraplength=210, justify="left"
                   ).pack(anchor="w", pady=(2, 8))
         self.sup_search = SearchEntry(side, "Search characters…", self.refresh_support_chars,
@@ -1223,12 +1255,14 @@ class App(AdvancedMixin, tk.Tk):
         ttk.Checkbutton(side, text="Only characters in this save",
                         style="Card.TCheckbutton", variable=self.sup_party_only,
                         command=self.refresh_support_chars).pack(anchor="w", pady=(0, 6))
-        self.sup_char_tree = scrolled_tree(side, columns=("n",), show="tree headings",
+        self.sup_char_tree = scrolled_tree(side, columns=("n", "top"), show="tree headings",
                                            selectmode="browse")
         self.sup_char_tree.heading("#0", text="Character", anchor="w")
-        self.sup_char_tree.heading("n", text="Pairs", anchor="e")
-        self.sup_char_tree.column("#0", width=170, minwidth=120)
-        self.sup_char_tree.column("n", width=52, anchor="e", stretch=False)
+        self.sup_char_tree.heading("n", text="Convs", anchor="e")
+        self.sup_char_tree.heading("top", text="Top", anchor="e")
+        self.sup_char_tree.column("#0", width=140, minwidth=100)
+        self.sup_char_tree.column("n", width=48, anchor="e", stretch=False)
+        self.sup_char_tree.column("top", width=52, anchor="e", stretch=False)
         self.sup_char_tree.container.pack(fill="both", expand=True)
         self.sup_char_tree.bind("<<TreeviewSelect>>", self.on_support_char)
 
@@ -1247,24 +1281,22 @@ class App(AdvancedMixin, tk.Tk):
                                  style="CardMuted.TLabel")
         self.sup_sub.pack(anchor="w", pady=(2, 0))
 
+        # the note is packed before the table so a short window shrinks the
+        # table instead of pushing the buttons and the note out of sight
+        ttk.Label(main, style="CardFaint.TLabel", justify="left", wraplength=620,
+                  text="Points are what the game turns into a support level: 3200 is the "
+                       "maximum (level 5). The save keeps a slot for every pair, so a pair "
+                       "whose support hasn't opened yet still has a value here — the game may "
+                       "not show it until it opens the relationship itself. “Seen” is the "
+                       "save's 支援会話 flag for a conversation; Max is the highest rank the "
+                       "game data gives the pair."
+                  ).pack(side="bottom", fill="x", anchor="w", padx=(12, 0), pady=(10, 0))
+
         body = ttk.Frame(main, style="Card.TFrame", padding=(12, 10))
         body.pack(fill="both", expand=True, padx=(10, 0), pady=(10, 0))
-        self.sup_tree = scrolled_tree(body, columns=("jp", "max", "seen", "party"),
-                                      show="tree headings", selectmode="browse")
-        self.sup_tree.heading("#0", text="Support partner", anchor="w")
-        self.sup_tree.heading("jp", text="Japanese", anchor="w")
-        self.sup_tree.heading("max", text="Max", anchor="center")
-        self.sup_tree.heading("seen", text="Conversations seen", anchor="w")
-        self.sup_tree.heading("party", text="In party", anchor="center")
-        self.sup_tree.column("#0", width=190, minwidth=140)
-        self.sup_tree.column("jp", width=150)
-        self.sup_tree.column("max", width=54, anchor="center", stretch=False)
-        self.sup_tree.column("seen", width=170, stretch=False)
-        self.sup_tree.column("party", width=80, anchor="center", stretch=False)
-        self.sup_tree.container.pack(fill="both", expand=True)
 
         acts = ttk.Frame(body, style="Card.TFrame")
-        acts.pack(fill="x", pady=(8, 0))
+        acts.pack(side="bottom", fill="x", pady=(8, 0))
         ttk.Label(acts, text="Record conversation as seen:", style="Card.TLabel").pack(side="left")
         for r in ("C", "B", "A"):
             ttk.Button(acts, text=r, width=3, style="Small.TButton",
@@ -1274,17 +1306,41 @@ class App(AdvancedMixin, tk.Tk):
         self.sup_write_lbl = ttk.Label(acts, text="", style="CardFaint.TLabel")
         self.sup_write_lbl.pack(side="left", padx=(12, 0))
 
-        ttk.Label(main, style="CardFaint.TLabel", justify="left", wraplength=780,
-                  text="The pair list and each pair's highest rank come from the game data "
-                       "(GameData/Reliance.bin and the 支援会話 flag names); a rank in the "
-                       "“seen” column means this save holds the matching conversation flag. "
-                       "Recording a conversation writes that flag — the same thing the game does "
-                       "when the conversation is seen — so the support should read as available "
-                       "in-game (the level itself is not a number this save exposes). The "
-                       "in-game Support screen also lists partners whose support has no "
-                       "conversation at all; those pairs aren't named in the data, so they "
-                       "can't appear here."
-                  ).pack(anchor="w", padx=(12, 0), pady=(10, 0))
+        pts = ttk.Frame(body, style="Card.TFrame")
+        pts.pack(side="bottom", fill="x", pady=(8, 0))
+        ttk.Label(pts, text="Support points:", style="Card.TLabel").pack(side="left")
+        self.sup_pt_var = tk.StringVar(value="")
+        self.sup_pt_spin = ttk.Spinbox(pts, from_=0, to=supports.max_points(), increment=50,
+                                       width=8, textvariable=self.sup_pt_var,
+                                       command=self.sup_apply_points)
+        self.sup_pt_spin.pack(side="left", padx=(8, 0))
+        self.sup_pt_spin.bind("<Return>", lambda _e: (self.sup_apply_points(), "break")[1])
+        ttk.Button(pts, text="Apply", style="Small.TButton",
+                   command=self.sup_apply_points).pack(side="left", padx=(6, 0))
+        ttk.Button(pts, text="Max", style="Small.TButton",
+                   command=lambda: self.sup_set_points(supports.max_points())
+                   ).pack(side="left", padx=(6, 0))
+        ttk.Button(pts, text="0", width=3, style="Small.TButton",
+                   command=lambda: self.sup_set_points(0)).pack(side="left", padx=(6, 0))
+        self.sup_pt_lbl = ttk.Label(pts, text="", style="CardFaint.TLabel")
+        self.sup_pt_lbl.pack(side="left", padx=(12, 0))
+
+        self.sup_tree = scrolled_tree(body, columns=("jp", "points", "max", "seen", "party"),
+                                      show="tree headings", selectmode="browse")
+        self.sup_tree.heading("#0", text="Support partner", anchor="w")
+        self.sup_tree.heading("jp", text="Japanese", anchor="w")
+        self.sup_tree.heading("points", text="Points", anchor="e")
+        self.sup_tree.heading("max", text="Max", anchor="center")
+        self.sup_tree.heading("seen", text="Conversations seen", anchor="w")
+        self.sup_tree.heading("party", text="In party", anchor="center")
+        self.sup_tree.column("#0", width=180, minwidth=130)
+        self.sup_tree.column("jp", width=140)
+        self.sup_tree.column("points", width=64, anchor="e", stretch=False)
+        self.sup_tree.column("max", width=50, anchor="center", stretch=False)
+        self.sup_tree.column("seen", width=160, stretch=False)
+        self.sup_tree.column("party", width=74, anchor="center", stretch=False)
+        self.sup_tree.container.pack(fill="both", expand=True)
+        self.sup_tree.bind("<<TreeviewSelect>>", self.on_support_pair)
 
     def _party_pids(self) -> set[str]:
         try:
@@ -1307,8 +1363,66 @@ class App(AdvancedMixin, tk.Tk):
         self._sup_flag_cache = (key, flags)
         return flags
 
+    def _support_points(self):
+        """{pair hash: (points, extra, offset)} from the save's GameUserData."""
+        if not self.sv:
+            return None
+        key = (self.sv.path, id(self.sv.payload))
+        cache = getattr(self, "_sup_pt_cache", None)
+        if cache and cache[0] == key:
+            return cache[1]
+        try:
+            f = self.core_of()
+            blk = f.block("GameUserData")
+            table = supports.find_table(f.payload, blk.start, blk.end) if blk else None
+        except Exception:  # noqa: BLE001 — never break the page over a missing table
+            table = None
+        self._sup_pt_cache = (key, table)
+        return table
+
+    def _sup_chars(self) -> list[tuple[str, dict]]:
+        """Every character the point table knows, with the conversation chart merged in."""
+        chart = supports.by_char()
+        out: list[tuple[str, dict]] = []
+        seen: set[str] = set()
+        for jp, en in supports.point_chars():
+            rec = chart.get(jp) or {}
+            out.append((jp, {"jp": jp, "en": rec.get("en") or en or jp,
+                             "partners": rec.get("partners") or []}))
+            seen.add(jp)
+        for jp, rec in chart.items():
+            if jp not in seen:
+                out.append((jp, rec))
+        out.sort(key=lambda kv: (kv[1]["en"] or kv[0]).lower())
+        return out
+
+    def _top_points(self, jp: str, points) -> int | None:
+        """The pair with the most points this character has in this save."""
+        if not points:
+            return None
+        best = 0
+        for pa in supports.point_partners().get(jp, ()):
+            best = max(best, supports.points_of(points, pa["hash"]) or 0)
+        return best
+
+    def _sup_partners(self, jp: str, rec: dict, points) -> list[dict]:
+        """Every partner of ``jp`` with its points, richest support first."""
+        chart = {p["jp"]: p for p in (rec.get("partners") or [])}
+        table = supports.point_partners().get(jp) or []
+        src = ([{"jp": p["jp"], "en": p["en"], "hash": p["hash"]} for p in table]
+               or [{"jp": p["jp"], "en": p["en"], "hash": None}
+                   for p in (rec.get("partners") or [])])
+        out = []
+        for p in src:
+            out.append({"jp": p["jp"], "en": p["en"] or p["jp"], "hash": p["hash"],
+                        "points": supports.points_of(points, p["hash"]),
+                        "chart": chart.get(p["jp"]) or {}})
+        out.sort(key=lambda r: (-(r["points"] or 0), r["en"].lower()))
+        return out
+
     def refresh_supports(self):
         self._sup_flag_cache = None
+        self._sup_pt_cache = None
         self.refresh_support_chars()
         self.on_support_char()
 
@@ -1317,14 +1431,14 @@ class App(AdvancedMixin, tk.Tk):
             return
         q = self.sup_search.get_query().strip().lower()
         party = self._party_pids() if (self.sv and self.sup_party_only.get()) else None
-        old_selection = self.sup_char_tree.selection()
-        old_rows = getattr(self, "_sup_rows", {})
-        old_jp = old_rows.get(old_selection[0], (None,))[0] if old_selection else None
+        keep = getattr(self, "_sup_char", None)
+        points = self._support_points()
         self.sup_char_tree.delete(*self.sup_char_tree.get_children())
         self._sup_rows = {}
+        iids: dict[str, str] = {}
         first = None
         n = 0
-        for jp, rec in supports.chars():
+        for jp, rec in self._sup_chars():
             en = rec["en"] or jp
             zh = unit_names_zh.chinese_name(en, japanese=jp) or ""
             if q and q not in en.lower() and q not in jp.lower() and q not in zh.lower():
@@ -1332,18 +1446,23 @@ class App(AdvancedMixin, tk.Tk):
             if party is not None and ("PID_" + jp) not in party:
                 continue
             label = unit_names_zh.display_name(en, japanese=jp, chinese=i18n.get_language() == "zh_CN")
+            top = self._top_points(jp, points)
             iid = self.sup_char_tree.insert("", "end", text=label,
-                                            values=(len(rec["partners"]),))
+                                            values=(len(rec.get("partners") or []),
+                                                    "" if top is None else f"{top:,}"))
             self._sup_rows[iid] = (jp, rec)
+            iids[jp] = iid
             n += 1
-            if first is None or jp == old_jp:
+            if first is None:
                 first = iid
         self.sup_count.configure(text=f"{n} character{'s' if n != 1 else ''}"
                                        + (" in this save" if party is not None else ""))
-        if first:
-            self.sup_char_tree.selection_set(first)
+        target = iids.get(keep or "") or first
+        if target:
+            self.sup_char_tree.selection_set(target)
             self.on_support_char()
         else:
+            self._sup_char = None
             self.sup_tree.delete(*self.sup_tree.get_children())
             self.sup_name.configure(text="Nothing to show")
             self.sup_sub.configure(text="Open a save, or untick “Only characters in this save”.")
@@ -1355,37 +1474,73 @@ class App(AdvancedMixin, tk.Tk):
             return
         jp, rec = rows[sel[0]]
         en = rec["en"] or jp
+        if getattr(self, "_sup_char", None) != jp:
+            self._sup_partner = None          # new character: don't keep the old partner
+        self._sup_char = jp
         label = unit_names_zh.display_name(en, japanese=jp, chinese=i18n.get_language() == "zh_CN")
         self.sup_name.configure(text=label)
         self.sup_avatar.show(en, "PID_" + jp)
 
         present = self._support_flags()
+        points = self._support_points()
         party = self._party_pids()
+        keep = getattr(self, "_sup_partner", None)
+        plist = self._sup_partners(jp, rec, points)
         self.sup_tree.delete(*self.sup_tree.get_children())
         self._sup_pairs = {}
+        self._sup_pt = {}
+        iids: dict[str, str] = {}
         seen_pairs = 0
-        best = ""
-        for pa in rec["partners"]:
-            got = [r for r in supports.RANKS if supports.seen(pa, present).get(r)]
+        for pa in plist:
+            got = [r for r in supports.RANKS if supports.seen(pa["chart"], present).get(r)]
             if got:
                 seen_pairs += 1
-            if pa["max"] in supports.RANKS:
-                if not best or supports.RANKS.index(pa["max"]) > supports.RANKS.index(best):
-                    best = pa["max"]
-            partner_en = pa["en"] or pa["jp"]
-            partner_label = unit_names_zh.display_name(partner_en, japanese=pa["jp"],
+            partner_label = unit_names_zh.display_name(pa["en"], japanese=pa["jp"],
                                                        chinese=i18n.get_language() == "zh_CN")
-            iid = self.sup_tree.insert("", "end", text=partner_label,
-                                       values=(pa["jp"], pa["max"] or "—",
-                                               ", ".join(got) if got else "—",
-                                               "✓" if ("PID_" + pa["jp"]) in party else ""),
-                                       tags=("sup_seen",) if got else ("sup_none",))
+            pts = pa["points"]
+            iid = self.sup_tree.insert(
+                "", "end", text=partner_label,
+                values=(pa["jp"],
+                        "—" if pts is None else f"{pts:,}",
+                        pa["chart"].get("max") or "—",
+                        ", ".join(got) if got else "—",
+                        "✓" if ("PID_" + pa["jp"]) in party else ""),
+                tags=("sup_seen",) if (got or pts) else ("sup_none",))
             self._sup_pairs[iid] = ({"a_en": label, "b_en": partner_label},
-                                    dict(pa.get("flags") or {}))
+                                    dict(pa["chart"].get("flags") or {}))
+            if pa["hash"] is not None:
+                self._sup_pt[iid] = (pa["hash"], pts, pa["jp"])
+            iids[pa["jp"]] = iid
         self._paint_support_tags()
+        best = max((pa["points"] or 0) for pa in plist) if plist else 0
         self.sup_sub.configure(
-            text=f"{len(rec['partners'])} conversation pairs · up to {best or '—'} · "
-                 f"{seen_pairs} recorded in this save")
+            text=f"{len(plist)} partners · top {best:,} points · "
+                 f"{seen_pairs} conversation{'s' if seen_pairs != 1 else ''} recorded "
+                 f"in this save")
+        if iids:
+            target = iids.get(keep or "") or next(iter(iids.values()))
+            self._sup_partner = next(k for k, v in iids.items() if v == target)
+            self.sup_tree.selection_set(target)
+            self.sup_tree.focus(target)
+            self.sup_tree.see(target)
+            self.on_support_pair()
+
+    def on_support_pair(self, _e=None):
+        """Mirror the selected pair's points into the editor row."""
+        if not hasattr(self, "sup_pt_var"):
+            return
+        sel = self.sup_tree.selection() if hasattr(self, "sup_tree") else ()
+        pt = getattr(self, "_sup_pt", {})
+        if not sel or sel[0] not in pt:
+            self.sup_pt_var.set("")
+            self.sup_pt_lbl.configure(text="")
+            return
+        _h, pts, _jp = pt[sel[0]]
+        self.sup_pt_var.set("" if pts is None else str(pts))
+        name = self.sup_tree.item(sel[0], "text")
+        self.sup_pt_lbl.configure(
+            text=(f"{name}: {pts:,} of {supports.max_points():,} points")
+            if pts is not None else f"{name}: no entry in this save")
 
     def _paint_support_tags(self):
         p = self.p
@@ -2431,12 +2586,43 @@ class App(AdvancedMixin, tk.Tk):
 
 
 def _dpi_aware():
-    if sys.platform == "win32":
+    """Ask Windows for real pixels instead of a blurry bitmap-stretched window:
+    per-monitor (2), else system-wide (1), else the pre-8.1 call."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    for mode in (2, 1):
         try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            if ctypes.windll.shcore.SetProcessDpiAwareness(mode) == 0:
+                return
         except Exception:  # noqa: BLE001
-            pass
+            break
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _install_scaling(root) -> float:
+    """The display's scale against 96 dpi (1.0, 1.25, 1.5, 2.0…).  Treeview
+    column widths are plain pixels while fonts grow with the DPI, so widths
+    set with .column() are scaled to match."""
+    try:
+        scale = max(1.0, root.winfo_fpixels("1i") / 96.0)
+    except tk.TclError:
+        scale = 1.0
+    if scale > 1.0 and not getattr(ttk.Treeview, "_fefw_scaled", False):
+        orig = ttk.Treeview.column
+
+        def column(self, column, option=None, **kw):
+            for k in ("width", "minwidth"):
+                if isinstance(kw.get(k), int):
+                    kw[k] = int(round(kw[k] * scale))
+            return orig(self, column, option, **kw)
+
+        ttk.Treeview.column = column
+        ttk.Treeview._fefw_scaled = True
+    return scale
 
 
 def main():

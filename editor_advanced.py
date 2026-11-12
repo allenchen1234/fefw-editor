@@ -22,6 +22,7 @@ import item_names_zh
 import class_names_zh
 import unit_names_zh
 import skill_names_zh
+import supports
 from fefw_save import item_ids, item_label, unit_ids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -196,7 +197,7 @@ class AdvancedMixin:
         win = tk.Toplevel(self)
         win.title(title)
         win.transient(self)
-        win.geometry("560x460")
+        self.place_dialog(win, 560, 460)
         win.configure(background=self.p["bg"])
         top = ttk.Frame(win, padding=10)
         top.pack(fill="x")
@@ -1042,6 +1043,46 @@ class AdvancedMixin:
         self.refresh_support_chars()
 
 
+    # ====================================================== support points
+    def sup_apply_points(self):
+        """Write the number in the points box onto the selected pair."""
+        raw = (self.sup_pt_var.get() or "").strip().replace(",", "").replace(" ", "")
+        if not raw.isdigit():
+            self.flash(f"Type a support point value between 0 and "
+                       f"{supports.max_points():,}.", "error")
+            return
+        self.sup_set_points(int(raw))
+
+    def sup_set_points(self, value: int):
+        """Set the selected pair's support points (the save's own value)."""
+        sel = self.sup_tree.selection() if hasattr(self, "sup_tree") else ()
+        pt = getattr(self, "_sup_pt", {})
+        if not sel or sel[0] not in pt:
+            self.flash("Pick a support partner on the Supports page first.", "info")
+            return
+        pair_hash, old, _jp = pt[sel[0]]
+        value = max(0, min(int(value), supports.max_points()))
+        a_en = self.sup_name.cget("text")
+        b_en = self.sup_tree.item(sel[0], "text")
+        if old == value:
+            self.flash(f"{a_en} – {b_en} already has {value:,} points.", "info")
+            return
+
+        def edit(g):
+            blk = g.block("GameUserData")
+            if not blk:
+                return None
+            table = supports.find_table(g.payload, blk.start, blk.end)
+            entry = (table or {}).get(pair_hash)
+            if entry is None or entry[0] == value:
+                return None
+            supports.set_points(g.payload, entry[2], value)
+            return g.payload
+
+        # _core_edit re-reads the save and refreshes every page, which rebuilds
+        # this one with the same character and partner still selected.
+        self._core_edit(edit, f"Support points {a_en} – {b_en} → {value:,}")
+
 def settings_offsets(f: core.SaveFile) -> list[int]:
     """Offsets of the difficulty/mode byte pairs, everywhere the save keeps them."""
     out = []
@@ -1103,6 +1144,8 @@ def _ask_number(parent, title: str, prompt: str, current: int, limit: int):
     ttk.Button(bar, text="OK", style="Accent.TButton", command=ok).pack(side="right")
     ttk.Button(bar, text="Cancel", command=win.destroy).pack(side="right", padx=(0, 8))
     ent.bind("<Return>", ok)
+    if hasattr(parent, "place_dialog"):
+        parent.place_dialog(win)
     ent.focus_set()
     ent.select_range(0, "end")
     parent.wait_window(win)
