@@ -30,8 +30,22 @@ NAMES = {
     "ウルタンド": "乌尔坦德", "ウーシュラ": "乌修拉", "ヨーカイ": "杨界", "ザーコネ": "札可捏",
 }
 
-# Named characters who do not appear in the support-pair data.
-EXTRA_NAMES = {"アンナ": ("Anna", "安娜")}
+# Characters present in the support-point table but not the conversation chart.
+# Names without a published Chinese equivalent use provisional transliterations.
+EXTRA_NAMES = {
+    "アンナ": ("Anna", "安娜"),
+    "クレオブロス": ("Cleobulus", "克雷欧布罗斯"),
+    "ミュソン": ("Myson", "缪森"),
+    "アウロラ": ("Aurora", "欧若拉"),
+    "グラディウス": ("Gladius", "格拉迪乌斯"),
+    "クラプカ": ("Klapka", "克拉普卡"),
+    "タホウニア": ("Tahonia", "塔霍尼雅"),
+    "ジュラ": ("Jurah", "茱拉"),
+    "マーズ": ("Mars", "马兹"),
+    "スミルノス": ("Smyrnos", "史米尔诺斯"),
+    "クレール": ("Credna", "柯雷尔"),
+    "カーラ": ("Kalla", "卡拉"),
+}
 ALL_NAMES = {**NAMES, **{jp: zh for jp, (_en, zh) in EXTRA_NAMES.items()}}
 
 

@@ -193,7 +193,7 @@ class AdvancedMixin:
 
     # -------------------------------------------------------- pick a value
     def _picker(self, title: str, rows, current: int | None = None):
-        """Modal searchable single-choice list. rows: [(key, primary, secondary)]."""
+        """Modal searchable list: (key, primary, secondary[, search aliases])."""
         win = tk.Toplevel(self)
         win.title(title)
         win.transient(self)
@@ -220,8 +220,10 @@ class AdvancedMixin:
             tree.delete(*tree.get_children())
             iids.clear()
             n = 0
-            for key, primary, secondary in rows:
-                if q and q not in str(primary).lower() and q not in str(secondary).lower():
+            for row in rows:
+                key, primary, secondary = row[:3]
+                aliases = row[3] if len(row) > 3 else ""
+                if q and q not in str(primary).lower() and q not in str(secondary).lower() and q not in str(aliases).lower():
                     continue
                 iid = tree.insert("", "end", text=primary, values=(secondary,))
                 iids[iid] = key
@@ -1567,8 +1569,8 @@ def add_convoy_item_ui(self):
         return
     rows = [(h, item_names_zh.display_name(layer.item_label(h, m), m,
                                            i18n.get_language() == "zh_CN"),
-             f"{m.get('jp', '')} {layer.item_label(h, m)}")
-            for h, m in layer.item_ids().items()]
+             m.get("jp", ""), layer.item_label(h, m))
+            for h, m in layer.item_ids().items() if not layer.is_shadow(m)]
     rows.sort(key=lambda r: str(r[1]).lower())
     iid = self._picker("Add to the convoy", rows)
     if iid is None:
