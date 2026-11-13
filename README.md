@@ -19,7 +19,7 @@ library, or a ready-made Windows `.exe`.
 | | Arts & skills | All six skill lists in the unit's record (equipped arts, equipped skills, arts known, everything learned…), by name, with add / remove |
 | | Inventory | Swap, add or remove a carried item, picked from a searchable catalogue. Known spells are listed separately |
 | | Class | Pick any class the game knows. It's added to the unit's own class list, the way the game does it |
-| **Convoy** | | Everything in storage, materials included: add a stack, swap the item in any row, change its quantity, remove a row, and repair a list damaged by older versions |
+| **Convoy** | | Everything in storage, materials included: add a stack, stock every material at once, swap the item in any row, change its quantity, remove a row, and repair a list damaged by older versions |
 | **Gold** | | Set gold |
 | **Player** | | Gold, renown exp and Karma Shards; difficulty, mode and playthrough number |
 | **Classes** | | A unit's whole class list (set the current class, add, swap or remove one) and its weapon masteries with their rank (E … S+) and exp |
@@ -127,9 +127,19 @@ result is read back before anything is written.
 
 ## The convoy
 
-The convoy is a fixed row of 1329 slots, materials included. **Add item…** puts
-a stack into the first empty slot and **Remove** empties a slot, the way the
-game deposits and withdraws, so the list always keeps its 1329 slots.
+The convoy is a fixed row of 1329 slots, one per item: each item has its own
+slot, and a stack sitting in another item's slot is ignored by the game.
+**Add item…** puts a stack in the item's own slot (adding to what is there) and
+**Remove** empties a slot, so the list always keeps its 1329 slots.
+
+**All materials…** asks for one quantity and stocks all 128 forging and cooking
+materials (ores, meat, fish, plants, leaves, manure) at it, each in its own
+slot. Undo takes it back.
+
+**Fixing 1.3.1.** Version 1.3.1's Add item… and All materials… put stacks in the
+first empty slot, so the game never showed them. Running All materials… again
+moves stray materials home, and adding an item again moves its stray copies
+into its own slot.
 
 **Damaged lists.** Versions before 1.2 did "Add" by writing an item over empty
 slots, which knocked the rest of the list out of line so the game couldn't read
