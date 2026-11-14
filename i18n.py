@@ -144,6 +144,7 @@ PHRASES = [
     ("Snapshot of ", "已为 "), (" slots saved to ", " 个存档槽创建快照并保存到 "),
     (" match", " 个匹配项"), ("first ", "前 "), (" unit", " 个角色"),
     ("Playthrough ", "周目 "), ("Level ", "等级 "), ("live record", "当前记录"),
+    ("every slot:", "所有存档槽："), ("slots disagree —", "存档槽设置不一致 —"),
     ("read-only", "只读"), ("Enemy / NPC", "敌人／NPC"),
     ("Current", "当前"), ("added ", "已添加 "), ("removed ", "已移除 "),
     ("unknown ", "未知 "), (" in this file", "（本文件）"), (" of ", " / "),

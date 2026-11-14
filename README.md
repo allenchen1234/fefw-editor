@@ -21,8 +21,8 @@ library, or a ready-made Windows `.exe`.
 | | Class | Pick any class the game knows. It's added to the unit's own class list, the way the game does it |
 | **Convoy** | | Everything in storage, materials included: add a stack, stock every material at once, swap the item in any row, change its quantity, remove a row, and repair a list damaged by older versions |
 | **Gold** | | Set gold |
-| **Player** | | Gold, renown exp and Karma Shards; difficulty, mode and playthrough number |
-| **Classes** | | A unit's whole class list (set the current class, add, swap or remove one) and its weapon masteries with their rank (E … S+) and exp |
+| **Player** | | Gold, renown exp and Karma Shards; difficulty, mode and playthrough number (written into every slot, since they belong to the run) |
+| **Classes** | | A unit's whole class list (set the current class, add, swap or remove one, set its exp) and its weapon masteries with their rank (E … S+) and exp — a range of masteries can be given the same exp at once |
 | **Supports** | | Every character's support partners with the **points** this save holds for the pair, the highest rank the game defines, and which conversations this save has recorded. Set the points (0 … 3200) and the game works the level out from them. **Record conversation as seen** writes that conversation's flag |
 | **Mounts** | | The battalion and mount each unit carries, chosen from the save's pool |
 | **Flags** | | Every named variable the save stores: support conversations, recruited / met, achievements, feature and class unlocks. Search, filter, set, add, remove |
@@ -60,7 +60,19 @@ Get the latest build from the
 * **Windows:** `FEFW-Save-Editor-<version>-windows.zip`. Unzip it anywhere you
   can write to and run `FEFW Save Editor.exe`; no Python needed. The exe isn't
   code-signed, so SmartScreen may ask you to click *More info → Run anyway*.
-* **Anything else:** `…-source.zip`, then see *Running from source*.
+* **Linux (x86-64):** `FEFW-Save-Editor-<version>-linux-x86_64.tar.gz`. No
+  Python or pip needed. Extract it to a folder you can write to and run
+  `./fefw-save-editor`:
+
+  ```
+  tar xzf FEFW-Save-Editor-*-linux-x86_64.tar.gz
+  cd FEFW-Save-Editor-*/
+  ./fefw-save-editor
+  ```
+
+  It needs glibc 2.35 or newer (Arch, Fedora, Debian 12, Ubuntu 22.04, Mint 21
+  and later all qualify). It runs under X11 or XWayland.
+* **Anything else (macOS, ARM):** `…-source.zip`, then see *Running from source*.
 
 ## Running from source
 
@@ -68,6 +80,18 @@ Get the latest build from the
 pip install -r requirements.txt
 python editor.py
 ```
+
+On Arch and other distros that block system-wide `pip install`, install the
+two dependencies from the distro instead and skip pip:
+
+```
+sudo pacman -S tk python-zstandard
+python editor.py
+```
+
+(Debian/Ubuntu: `sudo apt install python3-tk python3-zstandard`.) Or use a
+virtual environment: `python -m venv .venv && .venv/bin/pip install -r
+requirements.txt && .venv/bin/python editor.py`.
 
 or double-click **FEFW Save Editor.bat** on Windows. Python 3.10+. You can also
 pass a save folder (or any slot file in it): `python editor.py "C:\path\to\save"`.
@@ -96,9 +120,9 @@ Otherwise use **Open folder…** and pick any slot file inside it.
   played, and it opens first. `Route_<lord>` (e.g. `Route_Ism`) holds that
   lord's route while you play someone else. `Chapter_<lord>_<part>_<chapter>`
   are chapter checkpoints, the points the game's "go back in time" feature
-  returns to. `Global` holds settings only. The slot list shows the lord, part
-  and chapter each slot was saved in (e.g. `★ Auto · Theodora P1 Ch12`), read
-  from the save itself; ★ marks `Auto`.
+  returns to. `Part_<lord>_<part>` are part checkpoints. `Global` holds settings
+  only. The slot list shows the lord, part and chapter each slot was saved in
+  (e.g. `★ Auto · Theodora P1 Ch12`), read from the save itself; ★ marks `Auto`.
 * **Edit `Auto`.** It's the save the game continues from, so editing it alone is
   enough.
 * **Only the live data is changed.** `Auto` also carries its own copies of
@@ -171,6 +195,8 @@ PNGs into `icons/items/` and `icons/units/` to use real images; see
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+O | Open a save folder |
 | Ctrl+F | Jump to the search box on the current page |
+| Ctrl+A | Select every row in the table you last clicked |
+| Shift+click / Shift+drag | Select a range of rows (convoy, classes, masteries, flags…) |
 | F5 | Reload every slot from disk (asks first if you have unsaved edits) |
 | Enter / double-click | Use the selected catalogue item |
 
@@ -199,6 +225,7 @@ item_names_zh.py     Simplified Chinese item names and forge-level handling
 class_names_zh.py    Simplified Chinese class names keyed by Japanese class IDs
 unit_names_zh.py     Simplified Chinese names for identified characters
 skill_names_zh.py    Simplified Chinese combat art and skill names
+ui_util.py           table helpers: Ctrl+A and Shift+drag range selection
 fefw_core.py         the save's record tree: blocks, units, resizing edits, convoy, mounts, flags
 fefw_layer.py        what the GUI uses: units, items, skills, convoy and gold through fefw_core
 fefw_save.py         save container (decompress, checksums, write), ids and labels, small CLI
@@ -222,7 +249,7 @@ FEFW Save Editor.bat launcher (source install)
 ```
 
 `editor_settings.json` (theme, last folder, options) is created next to the
-editor, or next to the `.exe`, on first use.
+editor, or next to the `.exe` / Linux binary, on first use.
 
 ### Rebuilding the name tables
 
