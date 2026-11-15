@@ -43,7 +43,7 @@ from editor_advanced import AdvancedMixin  # noqa: E402  (Player / Classes / Fla
 from ui_util import enable_multi_select, last_tree  # noqa: E402  (Ctrl+A / Shift+drag in tables)
 
 APP_NAME = "Fortune's Weave Save Editor"
-__version__ = "1.3.4"
+__version__ = "1.3.7"
 SETTINGS_PATH = os.path.join(USER_DIR, "editor_settings.json")
 ICON_DIR = os.path.join(USER_DIR, "icons")
 
@@ -136,6 +136,10 @@ class SearchEntry(ttk.Entry):
         self._delay = delay
         self._job = None
         self._showing_ph = False
+        # Showing or hiding the placeholder writes the StringVar but never
+        # changes the query, so it must not fire on_change (#18: on the
+        # Supports page that refresh reselected the first character).
+        self._muted = False
         self._show_ph()
         self.bind("<FocusIn>", self._focus_in)
         self.bind("<FocusOut>", lambda e: self._show_ph())
@@ -145,16 +149,25 @@ class SearchEntry(ttk.Entry):
     def _show_ph(self):
         if not self._var.get():
             self._showing_ph = True
-            self._var.set(self._ph)
+            self._set_quietly(self._ph)
             self.configure(style="Placeholder.TEntry")
 
     def _focus_in(self, _e=None):
         if self._showing_ph:
             self._showing_ph = False
-            self._var.set("")
+            self._set_quietly("")
             self.configure(style="TEntry")
 
+    def _set_quietly(self, text: str):
+        self._muted = True
+        try:
+            self._var.set(text)
+        finally:
+            self._muted = False
+
     def _changed(self, *_a):
+        if self._muted:
+            return
         if self._job:
             self.after_cancel(self._job)
         self._job = self.after(self._delay, self._fire)
@@ -741,7 +754,8 @@ class App(AdvancedMixin, tk.Tk):
         self.inv_tree.tag_configure("header", foreground=p["muted"], font=self.f_small)
         for tree in (getattr(self, "cls_tree", None), getattr(self, "mas_tree", None),
                      getattr(self, "flag_tree", None), getattr(self, "mount_tree", None),
-                     getattr(self, "pool_tree", None)):
+                     getattr(self, "pool_tree", None),
+                     getattr(self, "map_tree", None)):
             if tree is not None:
                 tree.tag_configure("flag_unknown", foreground=p["muted"])
                 tree.tag_configure("empty", foreground=p["faint"])
@@ -915,6 +929,7 @@ class App(AdvancedMixin, tk.Tk):
         self.classes_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.flags_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.mounts_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.world_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.pages.add(self.units_page, text="Units")
         self.pages.add(self.convoy_page, text="Convoy")
         self.pages.add(self.gold_page, text="Gold")
@@ -923,6 +938,7 @@ class App(AdvancedMixin, tk.Tk):
         self.pages.add(self.classes_page, text="Classes")
         self.pages.add(self.flags_page, text="Flags")
         self.pages.add(self.mounts_page, text="Mounts")
+        self.pages.add(self.world_page, text="World map")
 
         self._build_units()
         self._build_convoy()
@@ -932,6 +948,7 @@ class App(AdvancedMixin, tk.Tk):
         self._build_classes()
         self._build_flags()
         self._build_mounts()
+        self._build_world_map()
         self._style_trees()
         self._enable_multi_select_all()
         self._update_dirty()
@@ -1498,7 +1515,8 @@ class App(AdvancedMixin, tk.Tk):
         jp, rec = rows[sel[0]]
         en = rec["en"] or jp
         if getattr(self, "_sup_char", None) != jp:
-            self._sup_partner = None          # new character: don't keep the old partner
+            self._sup_partner = None          # new character: don't keep the old partners
+            self._sup_keep = []
         self._sup_char = jp
         label = unit_names_zh.display_name(en, japanese=jp, chinese=i18n.get_language() == "zh_CN")
         self.sup_name.configure(text=label)
@@ -1541,9 +1559,14 @@ class App(AdvancedMixin, tk.Tk):
                  f"{seen_pairs} conversation{'s' if seen_pairs != 1 else ''} recorded "
                  f"in this save")
         if iids:
-            target = iids.get(keep or "") or next(iter(iids.values()))
+            # keep every partner that was selected (an edit rebuilds the list
+            # and re-sorts it by points), else the remembered one, else the top
+            kept = [iids[j] for j in (getattr(self, "_sup_keep", None) or []) if j in iids]
+            if not kept:
+                kept = [iids.get(keep or "") or next(iter(iids.values()))]
+            target = kept[0]
             self._sup_partner = next(k for k, v in iids.items() if v == target)
-            self.sup_tree.selection_set(target)
+            self.sup_tree.selection_set(kept)
             self.sup_tree.focus(target)
             self.sup_tree.see(target)
             self.on_support_pair()
@@ -1554,9 +1577,18 @@ class App(AdvancedMixin, tk.Tk):
             return
         sel = self.sup_tree.selection() if hasattr(self, "sup_tree") else ()
         pt = getattr(self, "_sup_pt", {})
+        if sel:
+            # remember the selection by name so a rebuild can restore it
+            self._sup_keep = [self.sup_tree.item(i, "values")[0] for i in sel]
+            self._sup_partner = self._sup_keep[0]
         if not sel or sel[0] not in pt:
             self.sup_pt_var.set("")
             self.sup_pt_lbl.configure(text="")
+            return
+        if len(sel) > 1:
+            n = sum(1 for i in sel if i in pt)
+            self.sup_pt_lbl.configure(
+                text=f"{len(sel)} partners selected: Apply / Max / 0 set all {n} of them")
             return
         _h, pts, _jp = pt[sel[0]]
         self.sup_pt_var.set("" if pts is None else str(pts))
@@ -1612,6 +1644,8 @@ class App(AdvancedMixin, tk.Tk):
             target = self.cls_search
         elif sel == str(self.mounts_page):
             target = None
+        elif sel == str(self.world_page):
+            target = self.map_search
         if target is None:
             return
         target.focus_set()

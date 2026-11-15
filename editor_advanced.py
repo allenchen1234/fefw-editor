@@ -24,6 +24,7 @@ import unit_names_zh
 import skill_names_zh
 import supports
 from fefw_save import item_ids, item_label, unit_ids
+from map_page import MapPageMixin
 from ui_util import enable_multi_select
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -131,7 +132,7 @@ def rank_of(exp: int) -> int:
     return r
 
 
-class AdvancedMixin:
+class AdvancedMixin(MapPageMixin):
     # ------------------------------------------------------------- helpers
     def core_of(self, sv=None):
         """fefw_core.SaveFile for a slot (cached on the payload object)."""
@@ -186,11 +187,13 @@ class AdvancedMixin:
         self.refresh_classes_page()
         self.refresh_flags()
         self.refresh_supports()
+        self.refresh_world_map()
 
     def refresh_core_pages(self):
         self.refresh_player()
         self.refresh_classes_page()
         self.refresh_flags()
+        self.refresh_world_map()
 
     # -------------------------------------------------------- pick a value
     def _picker(self, title: str, rows, current: int | None = None):
@@ -330,7 +333,7 @@ class AdvancedMixin:
             for sv in getattr(self, "files", {}).values():
                 q = sv.payload
                 if len(q) > 15 and q[12] == 15:
-                    counts[(q[14], q[15])] = counts.get((q[14], q[15]), 0) + 1
+                    counts[(q[15], q[14])] = counts.get((q[15], q[14]), 0) + 1   # (difficulty, mode)
             if len(counts) <= 1:
                 line += (f" · every slot: {i18n.tr(DIFFICULTIES[st[1]]) if st[1] < 3 else st[1]}"
                          f" / {i18n.tr(MODES[st[2]]) if st[2] < 2 else st[2]}")
@@ -393,8 +396,8 @@ class AdvancedMixin:
                 if not offs:
                     continue
                 for at in offs:
-                    g.payload[at] = d & 0xFF
-                    g.payload[at + 1] = m & 0xFF
+                    g.payload[at] = m & 0xFF          # mode comes first
+                    g.payload[at + 1] = d & 0xFF      # then difficulty
                 core.fix_embedded_hashes(g.payload)
                 if bytes(g.payload) == bytes(sv.payload):
                     continue
@@ -1075,33 +1078,42 @@ class AdvancedMixin:
         return maps[0].index if maps else -1
 
     def sup_set_rank(self, rank: str):
-        """Mark the selected support pair's <rank> conversation as seen."""
+        """Mark the <rank> conversation as seen for every selected pair."""
         sel = self.sup_tree.selection() if hasattr(self, "sup_tree") else ()
         rows = getattr(self, "_sup_pairs", {})
-        if not sel or sel[0] not in rows:
+        picked = [rows[i] for i in sel if i in rows]
+        if not picked:
             self.flash("Pick a support partner on the Supports page first.", "info")
             return
-        pair, fl = rows[sel[0]]
-        hash_ = (fl or {}).get(rank)
-        if not hash_:
-            self.flash(f"This pair has no {rank} conversation in the game data.", "error")
+        if not any((fl or {}).get(rank) for _p, fl in picked):
+            self.flash(("This pair has" if len(picked) == 1 else "None of these pairs have")
+                       + f" a {rank} conversation in the game data.", "error")
             return
         f = self.core_of()
-        maps = core.flag_maps(f)
-        have = any(x.hash == hash_ for m in maps for x in m.flags)
-        if have:
-            self.flash(f"Already recorded: {pair['a_en']} – {pair['b_en']} ({rank}).")
+        have = {x.hash for m in core.flag_maps(f) for x in m.flags}
+        todo = [(pair, fl[rank]) for pair, fl in picked
+                if (fl or {}).get(rank) and fl[rank] not in have]
+        if not todo:
+            self.flash(f"Already recorded ({rank}).")
             return
         target = self._map_for_prefix(f, "支援会話_")
+        hashes = [h for _p, h in todo]
 
         def edit(g):
-            ms = core.flag_maps(g)
-            m = next((x for x in ms if x.index == target), ms[0] if ms else None)
-            if m is None:
-                return None
-            return core.flag_add(g, m, hash_, 1)
+            for h in hashes:
+                ms = core.flag_maps(g)
+                m = next((x for x in ms if x.index == target), ms[0] if ms else None)
+                if m is None:
+                    return None
+                out = core.flag_add(g, m, h, 1)
+                if out is None:
+                    return None
+                g = core.SaveFile(out)
+            return g.payload
 
-        self._core_edit(edit, f"Support {pair['a_en']} – {pair['b_en']} ({rank}) seen")
+        pair = todo[0][0]
+        who = pair["b_en"] if len(todo) == 1 else f"{len(todo)} partners"
+        self._core_edit(edit, f"Support {pair['a_en']} – {who} ({rank}) seen")
         self.refresh_support_chars()
 
     def sup_forget_rank(self):
@@ -1155,37 +1167,44 @@ class AdvancedMixin:
         self.sup_set_points(int(raw))
 
     def sup_set_points(self, value: int):
-        """Set the selected pair's support points (the save's own value)."""
+        """Set support points (the save's own value) on every selected pair."""
         sel = self.sup_tree.selection() if hasattr(self, "sup_tree") else ()
         pt = getattr(self, "_sup_pt", {})
-        if not sel or sel[0] not in pt:
+        rows = [i for i in sel if i in pt]
+        if not rows:
             self.flash("Pick a support partner on the Supports page first.", "info")
             return
-        pair_hash, old, _jp = pt[sel[0]]
         value = max(0, min(int(value), supports.max_points()))
         a_en = self.sup_name.cget("text")
-        b_en = self.sup_tree.item(sel[0], "text")
-        if old == value:
-            self.flash(f"{a_en} – {b_en} already has {value:,} points.", "info")
+        todo = [(pt[i][0], self.sup_tree.item(i, "text")) for i in rows if pt[i][1] != value]
+        if not todo:
+            who = (self.sup_tree.item(rows[0], "text") if len(rows) == 1
+                   else f"all {len(rows)} partners")
+            self.flash(f"{a_en} – {who} already at {value:,} points.", "info")
             return
+        hashes = [h for h, _n in todo]
 
         def edit(g):
             blk = g.block("GameUserData")
             if not blk:
                 return None
-            table = supports.find_table(g.payload, blk.start, blk.end)
-            entry = (table or {}).get(pair_hash)
-            if entry is None or entry[0] == value:
-                return None
-            supports.set_points(g.payload, entry[2], value)
-            return g.payload
+            table = supports.find_table(g.payload, blk.start, blk.end) or {}
+            changed = False
+            for h in hashes:
+                entry = table.get(h)
+                if entry is None or entry[0] == value:
+                    continue
+                supports.set_points(g.payload, entry[2], value)
+                changed = True
+            return g.payload if changed else None
 
+        who = todo[0][1] if len(todo) == 1 else f"{len(todo)} partners"
         # _core_edit re-reads the save and refreshes every page, which rebuilds
-        # this one with the same character and partner still selected.
-        self._core_edit(edit, f"Support points {a_en} – {b_en} → {value:,}")
+        # this one with the same character and partners still selected.
+        self._core_edit(edit, f"Support points {a_en} – {who} → {value:,}")
 
 def settings_offsets(f: core.SaveFile) -> list[int]:
-    """Offsets of the difficulty/mode byte pairs, everywhere the save keeps them."""
+    """Offsets of the (mode, difficulty) byte pairs, everywhere the save keeps them."""
     out = []
 
     def collect(start: int, length: int, depth: int):
