@@ -306,6 +306,13 @@ place names in the same files.
 
 ## Making a release
 
+To build a Windows executable locally, install Python 3.10 or newer and run
+`build-exe.bat` from a command prompt (or double-click it). The script creates
+or reuses `.venv`, installs the required packages, and writes the standalone
+executable to `dist/FEFW Save Editor.exe`. The first build requires internet
+access to install the packages. Optional images can be placed in an `icons`
+folder beside the executable; settings are also saved beside it.
+
 1. Bump `__version__` in `editor.py` (e.g. `"1.2.1"`) and merge to `main`.
 2. Actions → **Release** → *Run workflow*, and enter the matching tag
    (`v1.2.1`). Pushing that tag works too.

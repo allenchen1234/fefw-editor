@@ -626,8 +626,8 @@ class AdvancedMixin(MapPageMixin):
     def _class_rows(self):
         rows = []
         for cid, meta in jobs().items():
-            rows.append((cid, class_label(cid),
-                         f"{meta.get('jp', '')} {meta.get('en', '')}"))
+            aliases = f"{meta.get('en', '')} {class_names_zh.chinese_name(meta) or ''}"
+            rows.append((cid, class_label(cid), meta.get("jp", ""), aliases))
         rows.sort(key=lambda r: r[1].lower())
         return rows
 
@@ -731,7 +731,9 @@ class AdvancedMixin(MapPageMixin):
         old = u.classes[entry]
         have = {c[0] for c in u.classes}
         rows = [r for r in self._class_rows() if r[0] not in have]
-        cid = self._picker(f"Swap {class_label(old[0])} for…", rows)
+        title = (f"将{class_label(old[0])}替换为…" if i18n.get_language() == "zh_CN"
+                 else f"Swap {class_label(old[0])} for…")
+        cid = self._picker(title, rows)
         if cid is None:
             return
 

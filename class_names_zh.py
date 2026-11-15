@@ -35,11 +35,121 @@ NAMES = {
     "スケルトン騎馬": "骷髅骑兵", "マミー金": "金色木乃伊", "マミー": "木乃伊", "ドラゴンゾンビ": "僵尸龙", "冥界の柱": "冥界之柱",
 }
 
+# Internal English identifiers also occur in the class catalogue. These are
+# distinct IDs, so label them without replacing or merging their saved keys.
+INTERNAL_NAMES = dict(line.split("|", 1) for line in """
+None|无
+Warrior|斗士
+Soldier|士兵
+Hunter|猎兵
+CurseMage|咒术师
+Flyingostrichsoldier|飞驼兵
+SwordFighter|剑士
+Archer|弓箭手
+Rogue|盗贼
+ArmorKnight|重装步兵
+Brigand|山贼
+Cestus|拳斗士
+Shaman|萨满
+Healer|司祭
+Flyingostrichknight|骑甲驼兵
+LightKnight|轻骑兵
+PegasusKnight|天翼兵
+Tank|战车兵
+Sydow|侍道
+Sniper|狙击手
+ForestKnight|森林骑士
+Ranger|游骑兵
+Dancer|舞者
+Guardian|守护者
+HeavyArmor|重铠兵
+BattleWarrior|勇士
+Blacksmith|锻冶师
+Vates|瓦忒斯
+Bishop|主教
+Bardinger|荣光骑士
+Cataphract|重装骑兵
+Torpador|吟游骑士
+Charadrios|卡拉德里乌斯
+Dragoon|龙骑兵
+ElephantKnight|战象兵
+SwordMaster|剑圣
+MasterArch|弓术大师
+HolyLancer|圣枪兵
+HighEpitaph|高阶墓志铭
+BowKnight|弓骑士
+ShadowSeeker|暗影追寻者
+Trickster|诡术师
+BattleMaster|战斗大师
+Fortress|要塞
+BattleMonk|战斗僧侣
+Druid|德鲁伊
+Wiseman|贤者
+Enlightened|觉者
+Orihaldia|奥利哈铁骑
+GreatKnight|大骑士
+Sale|塞雷
+Valkyrie|瓦尔基里乌姆
+DarkPegasus|巴伊芙·卡哈
+FalconKnight|圣天翼兵
+DragonMaster|龙骑统帅
+Braid|利刃
+Calamity|灾厄
+Trident|三叉戟
+Apsaras|阿普萨拉斯
+Eternal|永恒者
+Godhand|神之手
+Messiah|化身
+Cavalier|骑士
+Kusarikku|库萨里克
+Pig|野猪
+Yak|牦牛
+woodlouse|鼠妇
+sandbael|砂巴尔
+stripewolf|条纹狼
+sandvegle|砂维格尔
+seamonster|海兽
+atlasbear|阿特拉斯熊
+atlasbearS|阿特拉斯熊（小）
+sandworm|砂虫
+colossus|巨人
+titanusS|泰坦尼斯（小型）
+titanusB|泰坦尼斯（大型）
+golem|魔像
+Ketos|凯图斯
+digamma|迪伽玛
+queenhydra|九头蛇女王
+giantrukh|巨鸟鲁赫
+magicharpia|魔鸟鹰身女妖
+armoredsoldier|铠甲兵
+NabataeanDragon_Dagda|达格扎龙
+NabataeanDragon_Balor|巴罗尔龙
+NabataeanDragon_Mars|玛兹龙
+NabataeanDragon_Lyra|莱拉龙
+NabataeanDragon_LyraCradle|莱拉茧
+EvilBeast|召唤魔兽
+skeleton|骷髅
+mummy|木乃伊
+dragonzombie|僵尸龙
+shadowofbalor|巴罗尔之影
+pillar|冥界之柱
+""".strip().splitlines())
+
+NAMES.update({"オルニウス白": "白色奥尔尼乌斯", "メガニウス": "梅加尼乌斯",
+              "マジニウス": "马吉尼乌斯", "バウ": "巴乌", "ダグザンゾウ": "达格扎象",
+              "マミー銀": "银色木乃伊", "バロールの影": "巴罗尔之影"})
+
 
 def chinese_name(meta: dict | None) -> str | None:
     jp = (meta or {}).get("jp", "").removeprefix("JID_")
+    if jp.startswith("H_"):
+        base = jp[2:]
+        translated = NAMES.get(base) or INTERNAL_NAMES.get(base)
+        return translated + "（内部 H）" if translated else None
     if jp in NAMES:
         return NAMES[jp]
+    if jp in INTERNAL_NAMES:
+        return INTERNAL_NAMES[jp] + "（内部）"
     if jp.endswith("下馬") and jp[:-2] in NAMES:
         return NAMES[jp[:-2]] + "（下马）"
     return None

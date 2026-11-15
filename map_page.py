@@ -13,6 +13,8 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 import fefw_core as core
+import i18n
+import map_names_zh
 import worldmap as wm
 from ui_util import enable_multi_select
 
@@ -139,16 +141,19 @@ class MapPageMixin:
             total = len(cat.roads)
             for n, road in enumerate(cat.roads):
                 pts = [recs.get(cat.spots[i].key) for i in road]
-                name = cat.road_name(road)
+                english = cat.road_name(road)
+                chinese = " → ".join(map_names_zh.name(cat.spots[i].jp)
+                                     for i in (road[0], road[-1]))
+                name = chinese if i18n.get_language() == "zh_CN" else english
                 jp = "%s \u2192 %s" % (cat.spots[road[0]].jp, cat.spots[road[-1]].jp)
-                if any(r is None for r in pts) or (q and q not in (name + " " + jp).lower()):
+                if any(r is None for r in pts) or (q and q not in (english + " " + chinese + " " + jp).lower()):
                     continue
                 on = sum(1 for r in pts if r.state == wm.SHOWN)
                 state = ("Shown" if on == len(pts) else "Hidden" if on == 0
-                         else "%d of %d" % (on, len(pts)))
+                         else i18n.tr("%d of %d") % (on, len(pts)))
                 iid = "r%d" % n
                 tree.insert("", "end", iid=iid, text=name, tags=() if on else ("flag_unknown",),
-                            values=(jp, "%d points" % len(road), state, ""))
+                            values=(jp, i18n.tr("%d points") % len(road), state, ""))
                 self._map_rows[iid] = ("road", n)
                 listed += 1
         else:
@@ -158,13 +163,15 @@ class MapPageMixin:
                 if rec is None or s.is_place != want_places:
                     continue
                 total += 1
-                if q and q not in (s.name + " " + s.jp + " " + cat.kind_name(s.kind)).lower():
+                chinese = map_names_zh.name(s.jp)
+                if q and q not in (s.name + " " + chinese + " " + s.jp + " " + cat.kind_name(s.kind) + " " + i18n.tr(cat.kind_name(s.kind))).lower():
                     continue
                 iid = "s%d" % s.index
-                tree.insert("", "end", iid=iid, text=s.name,
+                name = chinese if i18n.get_language() == "zh_CN" else s.name
+                tree.insert("", "end", iid=iid, text=name,
                             tags=() if rec.state != wm.HIDDEN else ("flag_unknown",),
                             values=(s.jp if s.jp != s.name else "", cat.kind_name(s.kind),
-                                    wm.STATE_NAMES.get(rec.state, "state %d" % rec.state),
+                                    wm.STATE_NAMES.get(rec.state, i18n.tr("state %d") % rec.state),
                                     {0: "No", 1: "Yes"}.get(rec.visited, str(rec.visited))))
                 self._map_rows[iid] = ("spot", s.index)
                 listed += 1
@@ -173,7 +180,7 @@ class MapPageMixin:
             tree.selection_set(keep)
         pl = [recs[s.key] for s in wm.places(cat) if s.key in recs]
         on = sum(1 for r in pl if r.state != wm.HIDDEN)
-        self.map_count.configure(text="%d of %d places on the map · listing %d of %d"
+        self.map_count.configure(text=i18n.tr("%d of %d places on the map · listing %d of %d")
                                       % (on, len(pl), listed, total))
 
     # ------------------------------------------------------------------ write
@@ -206,11 +213,15 @@ class MapPageMixin:
             return
         parts = []
         if state is not None:
-            parts.append("Shown" if state == wm.SHOWN else "Hidden")
+            parts.append(i18n.tr("Shown" if state == wm.SHOWN else "Hidden"))
         if visited is not None:
-            parts.append("marked " + ("visited" if visited else "unvisited"))
-        self._map_write(picked, "%s %d map point%s" % (" and ".join(parts), len(picked),
-                                                       "" if len(picked) == 1 else "s"))
+            parts.append(i18n.tr("marked visited" if visited else "marked unvisited"))
+        if i18n.get_language() == "zh_CN":
+            what = "%s %d 个地图点" % ("并".join(parts), len(picked))
+        else:
+            what = "%s %d map point%s" % (" and ".join(parts), len(picked),
+                                           "" if len(picked) == 1 else "s")
+        self._map_write(picked, what)
 
     def _map_write(self, edits: dict, what: str):
         skipped = {"n": 0}
@@ -222,8 +233,8 @@ class MapPageMixin:
 
         self.push_undo()
         if self._core_edit(edit, what) and skipped["n"]:
-            self.flash("%s — %d skipped (a layout or value the editor hasn't seen) — "
-                       "Ctrl+S to write it." % (what, skipped["n"]), "warn")
+            self.flash(i18n.tr("%s — %d skipped (a layout or value the editor hasn't seen) — "
+                                "Ctrl+S to write it.") % (what, skipped["n"]), "warn")
 
     def map_show_all_places(self):
         recs, _ = self._map_records()
@@ -238,7 +249,7 @@ class MapPageMixin:
         if not edits:
             self.flash("Every place is already on the map.", "info")
             return
-        self._map_write(edits, "Showed %d places" % len(edits))
+        self._map_write(edits, i18n.tr("Showed %d places") % len(edits))
 
     def map_show_all_roads(self):
         recs, _ = self._map_records()
@@ -253,11 +264,11 @@ class MapPageMixin:
             return
         if not messagebox.askyesno(
                 "Save editor",
-                "Show %d hidden junctions and road points?\n\nThis draws every road the game "
-                "has, including ones the story hasn't opened yet. Ctrl+Z undoes it." % len(edits),
+                i18n.tr("Show %d hidden junctions and road points?\n\nThis draws every road the game "
+                        "has, including ones the story hasn't opened yet. Ctrl+Z undoes it.") % len(edits),
                 parent=self):
             return
-        self._map_write(edits, "Showed %d junctions and road points" % len(edits))
+        self._map_write(edits, i18n.tr("Showed %d junctions and road points") % len(edits))
 
 
 def _scrolled_tree(master, **kw) -> ttk.Treeview:
