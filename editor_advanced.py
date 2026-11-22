@@ -23,8 +23,23 @@ import class_names_zh
 import unit_names_zh
 import skill_names_zh
 import supports
+from ui_util import ScrollableFrame
 from fefw_save import item_ids, item_label, unit_ids
 from map_page import MapPageMixin
+from tutorial_page import TutorialPageMixin
+from blessing_page import BlessingPageMixin
+from fast_travel_page import FastTravelPageMixin
+import fast_travel
+import deeds
+from deed_page import DeedPageMixin
+from boon_page import BoonPageMixin
+from facility_page import FacilityPageMixin
+from story_page import StoryPageMixin
+from unit_entry_page import UnitEntryPageMixin
+import audiences
+import facilities
+import tutorials
+import flag_labels
 from ui_util import enable_multi_select
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -99,10 +114,12 @@ def flag_names() -> dict:
     global _FLAG_NAMES
     if _FLAG_NAMES is None:
         try:
-            raw = json.load(open(os.path.join(HERE, "flag_names.json"), encoding="utf8"))
+            with open(os.path.join(HERE, "flag_names.json"), encoding="utf8") as fh:
+                raw = json.load(fh)
             _FLAG_NAMES = {int(k, 16): v for k, v in raw.items()}
         except Exception:                     # noqa: BLE001 — the page still works
             _FLAG_NAMES = {}
+        flag_labels.apply_labels(_FLAG_NAMES, strict=False)
     return _FLAG_NAMES
 
 
@@ -132,46 +149,62 @@ def rank_of(exp: int) -> int:
     return r
 
 
-class AdvancedMixin(MapPageMixin):
+def matching_flag_map(source, target, map_i):
+    """Resolve a mirrored flag list by its member hash, never by scan order."""
+    selected = next((m for m in core.flag_maps(source) if m.index == map_i), None)
+    if selected is None:
+        raise core.SaveError('The selected flag list no longer exists.')
+    if source.payload == target.payload:
+        return selected
+    tree, group, _ = facilities.flag_group(source)
+    node = tree.nodes[group]; table = source.ptr(node.start)
+    keys = [source.u32(table+8*i) for i in range(source.u32(node.start) >> 24)
+            if source.ptr(table+8*i+4) == selected.start]
+    if len(keys) != 1:
+        raise core.SaveError('This flag list has no established identity for mirroring. Edit it with mirroring off.')
+    return facilities.locate_member(target, keys[0])
+
+
+class AdvancedMixin(MapPageMixin, TutorialPageMixin, BlessingPageMixin, FastTravelPageMixin, DeedPageMixin, BoonPageMixin, FacilityPageMixin, StoryPageMixin, UnitEntryPageMixin):
     # ------------------------------------------------------------- helpers
     def core_of(self, sv=None):
-        """fefw_core.SaveFile for a slot (cached on the payload object)."""
+        """Decoded slot, reused only while its source bytes are unchanged."""
         sv = sv or self.sv
         if sv is None:
             return None
         key = (sv.path, id(sv.payload))
         cache = getattr(sv, "_core_cache", None)
-        if cache and cache[0] == key:
+        if cache and cache[0] == key and cache[1].payload == sv.payload:
             return cache[1]
         f = core.SaveFile(bytes(sv.payload))
         sv._core_cache = (key, f)
         return f
 
     def _core_edit(self, fn, what: str) -> bool:
-        """fn(fefw_core.SaveFile) -> new payload; applied to every target slot."""
+        """Preflight every target, then stage one undoable multi-slot edit."""
         if not self.sv:
             return False
         self._commit_form()
-        touched, err = [], None
+        changes = []
         for sv in self._targets():
             try:
                 f = core.SaveFile(bytes(sv.payload))
                 new = fn(f)
-            except core.SaveError as exc:
-                err = exc
-                continue
-            except Exception as exc:          # noqa: BLE001 — report, never crash
-                err = exc
-                continue
+            except Exception as exc:          # noqa: BLE001 — atomic preflight
+                self.flash(f'Nothing changed: {os.path.basename(sv.path)} — {exc}', 'error')
+                return False
             if new is None or bytes(new) == bytes(sv.payload):
                 continue
-            sv.payload = bytearray(new)
+            changes.append((sv, bytearray(new)))
+        if not changes:
+            self.flash(f'Already set: {what}.', 'info')
+            return False
+        touched = [sv for sv, _ in changes]
+        self.push_undo(slots=touched)
+        for sv, new in changes:
+            sv.payload = new
             sv.scan()
             sv._core_cache = None
-            touched.append(sv)
-        if not touched:
-            self.flash(f"Couldn't apply “{what}”" + (f": {err}" if err else "."), "error")
-            return False
         self._touch(touched)
         self.refresh_after_core()
         where = f" in {len(touched)} slots" if len(touched) > 1 else ""
@@ -188,12 +221,24 @@ class AdvancedMixin(MapPageMixin):
         self.refresh_flags()
         self.refresh_supports()
         self.refresh_world_map()
+        self.refresh_tutorials()
+        self.refresh_blessings()
+        self.refresh_fast_travel()
+        self.refresh_facilities()
+        self.refresh_deeds()
+        self.refresh_boons()
 
     def refresh_core_pages(self):
         self.refresh_player()
         self.refresh_classes_page()
         self.refresh_flags()
         self.refresh_world_map()
+        self.refresh_tutorials()
+        self.refresh_blessings()
+        self.refresh_fast_travel()
+        self.refresh_facilities()
+        self.refresh_deeds()
+        self.refresh_boons()
 
     # -------------------------------------------------------- pick a value
     def _picker(self, title: str, rows, current: int | None = None):
@@ -258,8 +303,10 @@ class AdvancedMixin(MapPageMixin):
 
     # ============================================================ PLAYER
     def _build_player(self):
-        page = self.player_page
-        card = ttk.Frame(page, style="Card.TFrame", padding=(16, 14))
+        self.player_scroll = ScrollableFrame(self.player_page)
+        self.player_scroll.pack(fill="both", expand=True)
+        page = self.player_scroll.body
+        card = ttk.Frame(page, style="Card.TFrame", padding=(16, 10))
         card.pack(fill="x")
         ttk.Label(card, text="Player", style="CardH3.TLabel").pack(anchor="w")
         ttk.Label(card, text="Army-wide values, stored in GameUserData at the start of the save.",
@@ -284,7 +331,7 @@ class AdvancedMixin(MapPageMixin):
                                      justify="left")
         self.player_note.grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-        card2 = ttk.Frame(page, style="Card.TFrame", padding=(16, 14))
+        card2 = ttk.Frame(page, style="Card.TFrame", padding=(16, 10))
         card2.pack(fill="x", pady=(10, 0))
         ttk.Label(card2, text="Run settings", style="CardH3.TLabel").pack(anchor="w")
         ttk.Label(card2, text="Written into every copy the save keeps, and into every slot in this "
@@ -306,8 +353,10 @@ class AdvancedMixin(MapPageMixin):
         cb2.bind("<<ComboboxSelected>>", lambda e: self.apply_settings())
         self.play_lbl = ttk.Label(card2, text="", style="CardFaint.TLabel")
         self.play_lbl.pack(anchor="w", pady=(10, 0))
+        self._build_story(page)
 
     def refresh_player(self):
+        self.refresh_story()
         if not hasattr(self, "player_vars"):
             return
         f = self.core_of()
@@ -497,12 +546,14 @@ class AdvancedMixin(MapPageMixin):
         bar2 = ttk.Frame(mbox, style="Card.TFrame")
         bar2.pack(fill="x")
         ttk.Label(bar2, text="Weapon masteries", style="CardH3.TLabel").pack(side="left")
+        self.mas_sel_lbl = ttk.Label(bar2, text="", style="CardMuted.TLabel")
+        self.mas_sel_lbl.pack(side="left", padx=(10, 0))
         for text, cmd in (("Set rank…", self.set_mastery_rank), ("Set exp…", self.set_mastery_exp),
                           ("Add…", self.add_mastery), ("Remove", self.remove_mastery)):
             ttk.Button(bar2, text=text, style="Small.TButton", command=cmd).pack(side="right",
                                                                                padx=(6, 0))
         self.mas_tree = ttk.Treeview(mbox, columns=("rank", "exp", "next"),
-                                     show="tree headings", selectmode="browse")
+                                     show="tree headings", selectmode="extended")
         self.mas_tree.heading("#0", text="Weapon", anchor="w")
         self.mas_tree.heading("rank", text="Rank", anchor="center")
         self.mas_tree.heading("exp", text="Exp", anchor="e")
@@ -516,6 +567,8 @@ class AdvancedMixin(MapPageMixin):
         self.mas_tree.pack(side="left", fill="both", expand=True, pady=(6, 0))
         mas_sb.pack(side="left", fill="y", pady=(6, 0))
         self.mas_tree.bind("<Double-1>", lambda e: self.set_mastery_rank())
+        self.mas_tree.bind("<<TreeviewSelect>>", lambda e: self._on_mastery_select())
+        enable_multi_select(self.mas_tree)
 
         note = ttk.Frame(main, style="Card.TFrame")
         note.pack(fill="x", padx=(10, 0), pady=(6, 0))
@@ -614,6 +667,8 @@ class AdvancedMixin(MapPageMixin):
             self.cls_tree.insert("", "end", text=class_label(klass),
                                  values=(value, flags, "●" if klass == cid else ""),
                                  iid=str(i))
+        keep_uid, keep = getattr(self, "_mas_keep", (None, ()))
+        kept = []
         for i, (idx, exp) in enumerate(u.masteries):
             r = rank_of(exp)
             nxt = RANK_EXP[r + 1] if r + 1 < len(RANK_EXP) else None
@@ -621,6 +676,17 @@ class AdvancedMixin(MapPageMixin):
             self.mas_tree.insert("", "end", text=nm,
                                  values=(RANKS[r], exp, nxt if nxt is not None else "max"),
                                  iid=str(i))
+            if keep_uid == u.start and idx in keep:
+                kept.append(str(i))
+        # an edit rebuilds this list; keep the same weapons selected (by weapon,
+        # not row, because Add / Remove shift the rows)
+        if kept:
+            self.mas_tree.selection_set(kept)
+            self.mas_tree.focus(kept[0])
+            self.mas_tree.see(kept[0])
+        else:
+            self._mas_keep = (None, ())
+        self._on_mastery_select()
 
     # -- class actions
     def _class_rows(self):
@@ -778,48 +844,53 @@ class AdvancedMixin(MapPageMixin):
         self._core_edit(edit, what)
 
     # -- mastery actions
+    def _mastery_entries(self) -> list[int]:
+        """Selected mastery rows (entry index), in list order."""
+        sel = self.mas_tree.selection() if hasattr(self, "mas_tree") else ()
+        return sorted({int(i) for i in sel if str(i).isdigit()})
+
+    def _mastery_names(self, u, entries) -> list[str]:
+        out = []
+        for i in entries:
+            idx = u.masteries[i][0]
+            out.append(MASTERIES[idx][0] if 0 <= idx < len(MASTERIES) else f"#{idx}")
+        return out
+
+    def _remember_masteries(self, u, entries, extra=()):
+        """Keep these weapons selected when the edit rebuilds the list."""
+        self._mas_keep = (u.start, {u.masteries[i][0] for i in entries} | set(extra))
+
+    def _on_mastery_select(self):
+        if not hasattr(self, "mas_sel_lbl"):
+            return
+        n = len(self._mastery_entries())
+        self.mas_sel_lbl.configure(
+            text=f"{n} selected: Set rank / Set exp / Remove change all {n}" if n > 1 else "")
+
+    @staticmethod
+    def _short_list(names, limit: int = 4) -> str:
+        return ", ".join(names[:limit]) + (f" +{len(names) - limit} more"
+                                          if len(names) > limit else "")
+
     def set_mastery_rank(self):
         u = self._cls_unit()
-        sel = self.mas_tree.selection()
-        if u is None or not sel:
+        entries = self._mastery_entries()
+        if u is None or not entries:
+            self.flash("Pick a weapon mastery row first.", "info")
             return
-        entry = int(sel[0])
+        names = self._mastery_names(u, entries)
         rows = [(i, RANKS[i], f"{RANK_EXP[i]} exp") for i in range(len(RANKS))]
-        r = self._picker(f"Rank for {MASTERIES[u.masteries[entry][0]][0]}", rows)
+        if len(entries) == 1:
+            title = f"Rank for {names[0]}"
+            current = rank_of(u.masteries[entries[0]][1])
+        else:
+            title = f"Rank for {len(entries)} masteries ({self._short_list(names)})"
+            current = None
+        r = self._picker(title, rows, current)
         if r is None:
             return
         exp = RANK_EXP[r]
-
-        def edit(g):
-            v = next((x for x in g.units() if x.start == u.start), None)
-            if v is None:
-                return None
-            mas = list(v.masteries)
-            mas[entry] = (mas[entry][0], exp)
-            new = core.with_lists(g, v, mas, list(v.classes))
-            return new
-
-        self._core_edit(edit, f"{MASTERIES[u.masteries[entry][0]][0]} → {RANKS[r]}")
-
-    def set_mastery_exp(self):
-        u = self._cls_unit()
-        sel = self.mas_tree.selection()
-        if u is None or not sel:
-            return
-        entries = sorted({int(i) for i in sel if str(i).isdigit()})
-        if not entries:
-            return
-        cur = u.masteries[entries[0]][1] if len(entries) == 1 else 0
-        if len(entries) == 1:
-            prompt = (f"Exp for {MASTERIES[u.masteries[entries[0]][0]][0]} "
-                      f"(0 – 65535):")
-        else:
-            names = [MASTERIES[u.masteries[i][0]][0] for i in entries]
-            shown = ", ".join(names[:4]) + (f" +{len(names) - 4} more" if len(names) > 4 else "")
-            prompt = f"Exp for {len(entries)} masteries ({shown}) (0 – 65535):"
-        val = _ask_number(self, "Mastery exp", prompt, cur, 65535)
-        if val is None:
-            return
+        self._remember_masteries(u, entries)
 
         def edit(g):
             v = next((x for x in g.units() if x.start == u.start), None)
@@ -828,7 +899,43 @@ class AdvancedMixin(MapPageMixin):
             mas = list(v.masteries)
             changed = False
             for i in entries:
-                if mas[i][1] != val:
+                if i < len(mas) and mas[i][1] != exp:
+                    mas[i] = (mas[i][0], exp)
+                    changed = True
+            if not changed:
+                return None
+            return core.with_lists(g, v, mas, list(v.classes))
+
+        what = (f"{names[0]} → {RANKS[r]}" if len(entries) == 1
+                else f"{len(entries)} masteries → {RANKS[r]}")
+        self._core_edit(edit, what)
+
+    def set_mastery_exp(self):
+        u = self._cls_unit()
+        entries = self._mastery_entries()
+        if u is None or not entries:
+            self.flash("Pick a weapon mastery row first.", "info")
+            return
+        names = self._mastery_names(u, entries)
+        cur = u.masteries[entries[0]][1] if len(entries) == 1 else 0
+        if len(entries) == 1:
+            prompt = f"Exp for {names[0]} (0 – 65535):"
+        else:
+            prompt = (f"Exp for {len(entries)} masteries ({self._short_list(names)}) "
+                      f"(0 – 65535):")
+        val = _ask_number(self, "Mastery exp", prompt, cur, 65535)
+        if val is None:
+            return
+        self._remember_masteries(u, entries)
+
+        def edit(g):
+            v = next((x for x in g.units() if x.start == u.start), None)
+            if v is None:
+                return None
+            mas = list(v.masteries)
+            changed = False
+            for i in entries:
+                if i < len(mas) and mas[i][1] != val:
                     mas[i] = (mas[i][0], val)
                     changed = True
             if not changed:
@@ -836,7 +943,7 @@ class AdvancedMixin(MapPageMixin):
             return core.with_lists(g, v, mas, list(v.classes))
 
         if len(entries) == 1:
-            what = f"{MASTERIES[u.masteries[entries[0]][0]][0]} exp → {val}"
+            what = f"{names[0]} exp → {val}"
         else:
             what = f"{len(entries)} masteries' exp → {val}"
         self._core_edit(edit, what)
@@ -854,6 +961,7 @@ class AdvancedMixin(MapPageMixin):
         idx = self._picker("Add a weapon mastery", rows)
         if idx is None:
             return
+        self._mas_keep = (u.start, {idx})
 
         def edit(g):
             v = next((x for x in g.units() if x.start == u.start), None)
@@ -866,24 +974,32 @@ class AdvancedMixin(MapPageMixin):
 
     def remove_mastery(self):
         u = self._cls_unit()
-        sel = self.mas_tree.selection()
-        if u is None or not sel:
+        entries = self._mastery_entries()
+        if u is None or not entries:
+            self.flash("Pick a weapon mastery row first.", "info")
             return
-        entry = int(sel[0])
-        idx = u.masteries[entry][0]
+        names = self._mastery_names(u, entries)
+        what_q = (f"the {names[0]} mastery" if len(entries) == 1
+                  else f"{len(entries)} masteries ({self._short_list(names, 6)})")
         if not messagebox.askyesno("Save editor",
-                                   f"Remove the {MASTERIES[idx][0]} mastery from "
-                                   f"{unit_name(u.person)}?", parent=self):
+                                   f"Remove {what_q} from {unit_name(u.person)}?",
+                                   parent=self):
             return
+        drop = set(entries)
+        self._mas_keep = (None, ())
 
         def edit(g):
             v = next((x for x in g.units() if x.start == u.start), None)
             if v is None:
                 return None
-            mas = [m for i, m in enumerate(v.masteries) if i != entry]
+            mas = [m for i, m in enumerate(v.masteries) if i not in drop]
+            if len(mas) == len(v.masteries):
+                return None
             return core.with_lists(g, v, mas, list(v.classes))
 
-        self._core_edit(edit, f"Removed mastery {MASTERIES[idx][0]}")
+        what = (f"Removed mastery {names[0]}" if len(entries) == 1
+                else f"Removed {len(entries)} masteries")
+        self._core_edit(edit, what)
 
     # ============================================================== FLAGS
     def _build_flags(self):
@@ -908,6 +1024,7 @@ class AdvancedMixin(MapPageMixin):
         quick.pack(fill="x")
         for text, prefix in (("All", ""), ("Supports", "支援会話_"), ("Recruited", "加入_"),
                              ("Met", "面識_"), ("Achievements", "実績_"),
+                             ("Tutorials", "TUTO_"),
                              ("Expansion classes", "兵種解放_")):
             ttk.Button(quick, text=text, style="Small.TButton",
                        command=lambda p=prefix: self.set_flag_filter(p)).pack(side="left",
@@ -916,7 +1033,7 @@ class AdvancedMixin(MapPageMixin):
         self.flag_tree = scrolled_tree(page, columns=("label", "value", "map"),
                                        show="tree headings", selectmode="browse")
         self.flag_tree.heading("#0", text="Name", anchor="w")
-        self.flag_tree.heading("label", text="Reads as", anchor="w")
+        self.flag_tree.heading("label", text="Reads As", anchor="w")
         self.flag_tree.heading("value", text="Value", anchor="e")
         self.flag_tree.heading("map", text="List", anchor="e")
         self.flag_tree.column("#0", width=260)
@@ -991,30 +1108,25 @@ class AdvancedMixin(MapPageMixin):
         cur = next((fl.value for m in core.flag_maps(f) for fl in m.flags
                     if m.index == map_i and fl.hash == hash_), 0)
         val = _ask_number(self, "Flag value", "New value (0 – 2147483647):", cur, 2_147_483_647)
-        if val is None or val == cur:
+        if val is None or (val == cur and not self.mirror.get()):
             return
         self._write_flag(map_i, hash_, val)
 
     def _write_flag(self, map_i: int, hash_: int, value: int):
-        def edit(g):
-            maps = core.flag_maps(g)
-            m = next((x for x in maps if x.index == map_i), None)
-            if m is None:
-                return None
-            fl = next((x for x in m.flags if x.hash == hash_), None)
-            if fl is None:
-                return core.flag_add(g, m, hash_, value)
-            start = fl.offset - 5 if fl.wide else fl.offset - 4
-            size = 9 if fl.wide else 5
-            b = bytearray(g.payload[start:start + size])
-            if fl.wide:
-                b[5:9] = core.struct.pack("<i", value)
-            else:
-                b[4] = value & 0xFF
-            return core.replace_content(g, m.start, bytes(b))
-
-        name = (flag_names().get(hash_) or {}).get("label") or "0x%08x" % hash_
-        self._core_edit(edit, f"{name} = {value}")
+        if not self.sv:
+            return
+        source = core.SaveFile(self.sv.payload)
+        selected_map = next((m for m in core.flag_maps(source) if m.index == map_i), None)
+        if selected_map is None or not any(fl.hash == hash_ for fl in selected_map.flags):
+            self.flash('The selected flag no longer exists. Refresh the list.', 'error')
+            return
+        def edit(f):
+            fm = matching_flag_map(source, f, map_i)
+            if any(fl.hash == hash_ for fl in fm.flags):
+                return core.flag_set(f, fm, hash_, value)
+            return core.flag_add(f, fm, hash_, value)
+        name = (flag_names().get(hash_) or {}).get('label') or '0x%08x' % hash_
+        self._core_edit(edit, f'{name} = {value}')
 
     def remove_flag(self):
         key = self._flag_sel()
@@ -1025,15 +1137,11 @@ class AdvancedMixin(MapPageMixin):
         if not messagebox.askyesno("Save editor", f"Remove the flag {name}?", parent=self):
             return
 
+        source = core.SaveFile(self.sv.payload)
         def edit(g):
-            for m in core.flag_maps(g):
-                if m.index != map_i:
-                    continue
-                fl = next((x for x in m.flags if x.hash == hash_), None)
-                if fl is None:
-                    return None
-                return core.flag_remove(g, m, fl)
-            return None
+            m = matching_flag_map(source, g, map_i)
+            fl = next((x for x in m.flags if x.hash == hash_), None)
+            return core.flag_remove(g, m, fl) if fl else g.payload
 
         self._core_edit(edit, f"Removed {name}")
 
@@ -1055,11 +1163,12 @@ class AdvancedMixin(MapPageMixin):
             return
         target = maps[0].index
 
+        source = core.SaveFile(self.sv.payload)
         def edit(g):
-            ms = core.flag_maps(g)
-            if not ms:
-                return None
-            return core.flag_add(g, ms[0], hash_, val)
+            m = matching_flag_map(source, g, target)
+            if any(fl.hash == hash_ for fl in m.flags):
+                return core.flag_set(g, m, hash_, val)
+            return core.flag_add(g, m, hash_, val)
 
         name = (names.get(hash_) or {}).get("label") or "0x%08x" % hash_
         self._core_edit(edit, f"Added {name} = {val}")
@@ -1300,45 +1409,53 @@ def _slot_payload(app):
 
 
 # ---------------------------------------------------------------- undo/redo
-def push_undo(self):
-    """Snapshot the payload before an edit, so Ctrl+Z can take it back."""
+def _history_snapshot(slots):
+    return [(sv, bytes(sv.payload), getattr(sv, '_pending_story_chapter', None)) for sv in slots]
+
+
+def push_undo(self, slots=None):
+    """Snapshot every affected slot; story actions pass only the selected slot."""
     if not self.sv:
         return
-    stack = getattr(self, "_undo_stack", None)
-    if stack is None:
-        stack = self._undo_stack = []
-        self._redo_stack = []
-    stack.append(bytes(self.sv.payload))
-    del stack[:-60]
+    if getattr(self, '_history_slot', None) is not self.sv:
+        self._undo_stack, self._redo_stack = [], []
+        self._history_slot = self.sv
+    slots = list(self._targets() if slots is None else slots)
+    snapshot = _history_snapshot(slots)
+    self._undo_stack.append(snapshot)
+    del self._undo_stack[:-60]
     self._redo_stack.clear()
 
 
-def undo(self):
-    stack = getattr(self, "_undo_stack", None)
-    if not stack or not self.sv:
-        self.flash("Nothing to undo.", "info")
+def _restore_history(self, source, destination, message):
+    stack = getattr(self, source, None)
+    if not stack or not self.sv or getattr(self, '_history_slot', None) is not self.sv:
+        self.flash('Nothing to ' + ('undo.' if source == '_undo_stack' else 'redo.'), 'info')
         return
-    self._redo_stack.append(bytes(self.sv.payload))
-    self.sv.payload = bytearray(stack.pop())
-    self.sv.scan()
-    self.sv._core_cache = None
-    self._touch([self.sv])
+    snapshot = stack[-1]
+    files = getattr(self, 'files', None)
+    if files is not None and any(files.get(sv.path) is not sv for sv, _, _ in snapshot):
+        self.flash('A save affected by this edit was reloaded. History was kept; reopen the original saves before undoing.', 'warn')
+        return
+    slots = [sv for sv, _, _ in snapshot]
+    getattr(self, destination).append(_history_snapshot(slots))
+    stack.pop()
+    for sv, payload, pending in snapshot:
+        sv.payload = bytearray(payload)
+        sv._pending_story_chapter = pending
+        sv.scan()
+        sv._core_cache = None
+    self._touch(slots)
     self.refresh_after_core()
-    self.flash("Undone — Ctrl+Y puts it back.", "ok")
+    self.flash(message, 'ok')
+
+
+def undo(self):
+    _restore_history(self, '_undo_stack', '_redo_stack', 'Undone — Ctrl+Y puts it back.')
 
 
 def redo(self):
-    stack = getattr(self, "_redo_stack", None)
-    if not stack or not self.sv:
-        self.flash("Nothing to redo.", "info")
-        return
-    self._undo_stack.append(bytes(self.sv.payload))
-    self.sv.payload = bytearray(stack.pop())
-    self.sv.scan()
-    self.sv._core_cache = None
-    self._touch([self.sv])
-    self.refresh_after_core()
-    self.flash("Redone.", "ok")
+    _restore_history(self, '_redo_stack', '_undo_stack', 'Redone.')
 
 
 # --------------------------------------------------------------- snapshots
@@ -1458,7 +1575,6 @@ def add_skill(self, index: int):
     sid = self._picker(title, rows)
     if sid is None:
         return
-    self.push_undo()
 
     def edit(g):
         u = layer.unit_in(g, self.uid)
@@ -1494,7 +1610,6 @@ def remove_skill(self, index: int):
             return None
         return core.with_skill_list(g, u, index + 1, [x for i, x in enumerate(ids) if i != k])
 
-    self.push_undo()
     self._core_edit(edit, f"{layer.SKILL_LIST_NAMES[index]}: removed entry {k + 1}")
 
 
@@ -1597,7 +1712,6 @@ def assign_battalion(self, clear: bool = False):
             return
         legion = layer.battalions(self.sv.payload)[idx]
         legion = core.Legion(legion.row, g.unit_number if g else 0, legion.id)
-    self.push_undo()
 
     def edit(f):
         u = layer.unit_in(f, uid)
@@ -1618,7 +1732,6 @@ def remove_battalion(self):
     if kind != "battalion":
         self.flash("Pick a battalion in the pool first.", "info")
         return
-    self.push_undo()
     self._core_edit(lambda f: layer_del_battalion(f, idx), "Removed battalion from the pool")
 
 
@@ -1637,8 +1750,9 @@ def copy_unit_in(self):
     """Bring a unit over from another slot of the same folder."""
     import os
     from tkinter import filedialog
-    if not self.sv:
+    if not self._unit_entry_ready():
         return
+    expected=(self.sv,bytes(self.sv.payload))
     others = [p for p in self.slot_paths if p != self.sv.path]
     start = self.folder or os.path.dirname(self.sv.path)
     pick = filedialog.askopenfilename(
@@ -1658,10 +1772,18 @@ def copy_unit_in(self):
     uid = self._picker(f"Copy a unit from {os.path.basename(pick)}", rows)
     if uid is None:
         return
-    self.push_undo()
+    if self.sv is not expected[0] or bytes(self.sv.payload)!=expected[1]:
+        self.flash('The destination changed. Reopen the import dialog.','warn');return
+    try:
+        import unit_entries
+        source=self.core_of(src)
+        unit=layer.unit_in(source,uid)
+        if unit is None:raise core.SaveError('No unique source unit.')
+    except core.SaveError as exc:self.flash(str(exc),'error');return
     name = next(r[1] for r in rows if r[0] == uid)
-    self._core_edit(lambda f: (layer.copy_unit_in(f.payload, pick, uid) and f.payload) or None,
-                    f"Copied {name} in")
+    if self._core_edit(lambda f: unit_entries.copy_in(source, unit, f), f'Copied {name} with a free local unit number'):
+        self.uid=uid;self.show_unit()
+
 
 
 def remove_current_unit(self):
@@ -1677,7 +1799,6 @@ def remove_current_unit(self):
                       "which can confuse it. Undo (Ctrl+Z) brings them back; nothing is "
                       "written until you save.", parent=self):
         return
-    self.push_undo()
     self._core_edit(lambda f: (layer.remove_unit(f.payload, self.uid) and f.payload) or None,
                     f"Removed {self._unit_label(u)}")
     self.uid = None
@@ -1699,6 +1820,18 @@ def add_convoy_item_ui(self):
     if not qty:
         return
     conv = layer.live_convoy(bytes(self.sv.payload))
+    if conv is not None and not layer.stacks(iid):
+        # gear takes one slot per copy: say so up front if they won't fit
+        room = layer.convoy_free_gear_slots(bytes(self.sv.payload))
+        if room < qty:
+            self.flash(f"{layer.item_label(iid)} doesn't stack - {qty} copies need {qty} "
+                       f"slots and the convoy has room for {room}.", "warn")
+            return
+        if self._core_edit(
+                lambda f: (layer.add_convoy_copies(f.payload, iid, qty) and f.payload) or None,
+                f"Convoy: added {layer.item_label(iid)} ×{qty} (one slot each)"):
+            self.refresh_convoy()
+        return
     home = layer.convoy_home(iid, conv.slots) if conv else None
     if home is None:
         self.flash(f"{layer.item_label(iid)} has no convoy slot of its own.", "warn")
@@ -1708,7 +1841,6 @@ def add_convoy_item_ui(self):
         self.flash(f"Slot {home + 1}, {layer.item_label(iid)}'s own slot, holds "
                    f"{layer.item_label(other.iid)} — remove that first.", "warn")
         return
-    self.push_undo()
     self._core_edit(lambda f: (layer.add_convoy_slot(f.payload, iid, qty) and f.payload) or None,
                     f"Convoy: added {layer.item_label(iid)} ×{qty}")
     self.refresh_convoy()
@@ -1733,7 +1865,6 @@ def fill_materials_ui(self):
                       "already have are set to it.", max(1, start), 999)
     if not qty:
         return
-    self.push_undo()
     got = {}
 
     def run(f):
@@ -1757,7 +1888,6 @@ def remove_convoy_item_ui(self):
     if not slots:
         self.flash("Pick a convoy row first.", "info")
         return
-    self.push_undo()
     for slot in sorted(slots, reverse=True):
         self._core_edit(
             lambda f, s=slot: (layer.remove_convoy_slot(f.payload, s) and f.payload) or None,

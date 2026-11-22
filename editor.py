@@ -40,10 +40,10 @@ import item_names_zh  # noqa: E402
 import class_names_zh  # noqa: E402
 import unit_names_zh  # noqa: E402
 from editor_advanced import AdvancedMixin  # noqa: E402  (Player / Classes / Flags pages)
-from ui_util import enable_multi_select, last_tree  # noqa: E402  (Ctrl+A / Shift+drag in tables)
+from ui_util import ScrollableFrame, enable_multi_select, last_tree  # noqa: E402  (Ctrl+A / Shift+drag in tables)
 
 APP_NAME = "Fortune's Weave Save Editor"
-__version__ = "1.3.7"
+__version__ = "1.4.0"
 SETTINGS_PATH = os.path.join(USER_DIR, "editor_settings.json")
 ICON_DIR = os.path.join(USER_DIR, "icons")
 
@@ -423,7 +423,7 @@ class App(AdvancedMixin, tk.Tk):
         self.title(APP_NAME)
         self.ui_scale = _install_scaling(self)
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        w, h = min(self.px(1240), sw - 40), min(self.px(780), sh - 80)
+        w, h = min(self.px(1360), sw - 40), min(self.px(900), sh - 80)
         self.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 3)}")
         self.minsize(min(self.px(1000), w), min(self.px(640), h))
 
@@ -668,10 +668,12 @@ class App(AdvancedMixin, tk.Tk):
         s.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
         s.configure("Side.Treeview", background=p["side"], fieldbackground=p["side"])
 
-        s.configure("Vertical.TScrollbar", background=p["raised"], troughcolor=p["card"],
-                    bordercolor=p["card"], lightcolor=p["raised"], darkcolor=p["raised"],
-                    arrowcolor=p["faint"], gripcount=0, arrowsize=12)
-        s.map("Vertical.TScrollbar", background=[("active", p["border"])])
+        for orientation in ("Vertical", "Horizontal"):
+            style = f"{orientation}.TScrollbar"
+            s.configure(style, background=p["raised"], troughcolor=p["card"],
+                        bordercolor=p["card"], lightcolor=p["raised"], darkcolor=p["raised"],
+                        arrowcolor=p["faint"], gripcount=0, arrowsize=12)
+            s.map(style, background=[("active", p["border"])])
 
         # tabs
         s.configure("TNotebook", background=p["bg"], borderwidth=0, tabmargins=(0, 4, 0, 0))
@@ -683,7 +685,7 @@ class App(AdvancedMixin, tk.Tk):
               lightcolor=[("selected", p["accent"])],
               expand=[("selected", (0, 0, 0, 0))])
         s.configure("Main.TNotebook", background=p["side"], tabmargins=(12, 0, 0, 0))
-        s.configure("Main.TNotebook.Tab", background=p["side"], padding=self.pad(20, 10),
+        s.configure("Main.TNotebook.Tab", background=p["side"], padding=self.pad(9, 10),
                     lightcolor=p["side"], bordercolor=p["side"])
         s.map("Main.TNotebook.Tab", background=[("selected", p["bg"]), ("active", p["raised"])],
               lightcolor=[("selected", p["accent"])])
@@ -867,13 +869,15 @@ class App(AdvancedMixin, tk.Tk):
         # ---- header
         head = ttk.Frame(self, style="Header.TFrame", padding=(18, 12, 18, 10))
         head.pack(fill="x")
-        brand = ttk.Frame(head, style="Header.TFrame")
+        actions = ttk.Frame(head, style="Header.TFrame")
+        actions.pack(fill="x")
+        brand = ttk.Frame(actions, style="Header.TFrame")
         brand.pack(side="left")
         ttk.Label(brand, text="Fortune's Weave", style="Title.TLabel").pack(anchor="w")
         ttk.Label(brand, text=f"SAVE EDITOR  ·  v{__version__}",
                   style="Subtitle.TLabel").pack(anchor="w")
 
-        right = ttk.Frame(head, style="Header.TFrame")
+        right = ttk.Frame(actions, style="Header.TFrame")
         right.pack(side="right")
         self.theme_btn = ttk.Button(right, text="☀" if self.theme_name() == "dark" else "☾",
                                     width=3, style="Icon.TButton", command=self.toggle_theme)
@@ -889,18 +893,19 @@ class App(AdvancedMixin, tk.Tk):
         self.revert_btn.pack(side="right")
         ttk.Button(right, text="Snapshot", command=self.take_snapshot).pack(side="right", padx=(0, 8))
         ttk.Button(right, text="Restore…", command=self.restore_snapshot).pack(side="right")
+        self.open_btn = ttk.Button(right, text="Open…", command=self.open_dialog)
+        self.open_btn.pack(side="right", padx=(0, 8))
 
         mid = ttk.Frame(head, style="Header.TFrame")
-        mid.pack(side="left", padx=(32, 0), fill="x", expand=True)
+        mid.pack(fill="x", pady=(10, 0))
         r1 = ttk.Frame(mid, style="Header.TFrame")
         r1.pack(fill="x")
         ttk.Label(r1, text="Slot", style="Side.TLabel").pack(side="left")
         self.slot_var = tk.StringVar()
         self.slot_box = ttk.Combobox(r1, textvariable=self.slot_var, state="readonly", width=52)
-        self.slot_box.pack(side="left", padx=(8, 8))
+        self.slot_box.pack(side="left", padx=(8, 0), fill="x", expand=True)
         self.slot_box.bind("<<ComboboxSelected>>", self.on_slot_pick)
         self.register_combo(self.slot_box)
-        ttk.Button(r1, text="Open folder…", command=self.open_dialog).pack(side="left")
         r2 = ttk.Frame(mid, style="Header.TFrame")
         r2.pack(fill="x", pady=(6, 0))
         self.mirror_chk = ttk.Checkbutton(r2, text="Also edit this route's other saves",
@@ -914,7 +919,6 @@ class App(AdvancedMixin, tk.Tk):
         bar = ttk.Frame(self, style="Header.TFrame", padding=(18, 6))
         bar.pack(side="bottom", fill="x")
         self.status_lbl = ttk.Label(bar, text="Ready", style="Status.TLabel")
-        self.status_lbl.pack(side="left")
         self.dirty_lbl = ttk.Label(bar, text="", style="Status.TLabel")
         self.dirty_lbl.pack(side="right")
 
@@ -930,15 +934,36 @@ class App(AdvancedMixin, tk.Tk):
         self.flags_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.mounts_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.world_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.tutorials_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.blessings_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.fast_travel_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.facilities_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.deeds_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
+        self.boons_page = ttk.Frame(self.pages, padding=(14, 14, 14, 8))
         self.pages.add(self.units_page, text="Units")
         self.pages.add(self.convoy_page, text="Convoy")
         self.pages.add(self.gold_page, text="Gold")
         self.pages.add(self.supports_page, text="Supports")
         self.pages.add(self.player_page, text="Player")
         self.pages.add(self.classes_page, text="Classes")
-        self.pages.add(self.flags_page, text="Flags")
         self.pages.add(self.mounts_page, text="Mounts")
         self.pages.add(self.world_page, text="World map")
+        self.pages.add(self.tutorials_page, text="Tutorials")
+        self.pages.add(self.blessings_page, text="Blessings")
+        self.pages.add(self.fast_travel_page, text="Fast travel")
+        self.pages.add(self.facilities_page, text="Functions")
+        self.pages.add(self.deeds_page, text="Notable Deeds")
+        self.pages.add(self.boons_page, text="Boons")
+        self.pages.add(self.flags_page, text="Flags")
+
+        tab_menu = tk.Menu(self, tearoff=False)
+        for page in self.pages.tabs():
+            tab_menu.add_command(label=self.pages.tab(page, 'text'),
+                                 command=lambda page=page: self.pages.select(page))
+        self.tab_menu_button = ttk.Menubutton(bar, text='Go to tab', menu=tab_menu)
+        self.tab_menu_button.pack(side='right', padx=(10, 16))
+        self.status_lbl.pack(side='left', fill='x', expand=True)
+        self.pages.enable_traversal()
 
         self._build_units()
         self._build_convoy()
@@ -949,18 +974,28 @@ class App(AdvancedMixin, tk.Tk):
         self._build_flags()
         self._build_mounts()
         self._build_world_map()
+        self._build_tutorials()
+        self._build_blessings()
+        self._build_fast_travel()
+        self._build_facilities()
+        self._build_deeds()
+        self._build_boons()
         self._style_trees()
         self._enable_multi_select_all()
         self._update_dirty()
 
     def _enable_multi_select_all(self):
-        """Ctrl+A / Shift+drag on every list except the two row-pickers.
+        """Ctrl+A / Shift+drag on every list except the three row-pickers.
 
-        The unit lists drive the edit form, so they stay single-choice; every
+        Unit and blessing lists drive edit forms, so stay single-choice; every
         other table (convoy, classes, masteries, flags, mounts) takes a range.
         """
         skip = {id(getattr(self, "unit_tree", None)),
-                id(getattr(self, "cls_unit_tree", None))}
+                id(getattr(self, "cls_unit_tree", None)),
+                id(getattr(self, "blessing_tree", None)),
+                id(getattr(self, "deed_tree", None)),
+                id(getattr(self, "boon_tree", None)),
+                id(getattr(self, "facility_access_tree", None))}
 
         def walk(w):
             for child in w.winfo_children():
@@ -978,28 +1013,36 @@ class App(AdvancedMixin, tk.Tk):
         side = ttk.Frame(pane, style="Card.TFrame", padding=12)
         pane.add(side, weight=0)
         top = ttk.Frame(side, style="Card.TFrame")
-        top.pack(fill="x")
+        side.columnconfigure(0, weight=1)
+        side.rowconfigure(3, weight=1)
+        top.grid(row=0, column=0, sticky="ew")
         ttk.Label(top, text="Units", style="CardH3.TLabel").pack(side="left")
         self.unit_count = ttk.Label(top, text="", style="CardMuted.TLabel")
         self.unit_count.pack(side="right")
         self.unit_search = SearchEntry(side, "Search units or classes…  (Ctrl+F)",
                                        self.refresh_units, width=30)
-        self.unit_search.pack(fill="x", pady=(8, 6))
+        self.unit_search.grid(row=1, column=0, sticky="ew", pady=(8, 6))
         self.unit_search.bind("<Down>", lambda e: (self.unit_tree.focus_set(), "break")[1])
         ttk.Checkbutton(side, text="Show enemies & NPCs", style="Card.TCheckbutton",
                         variable=self.show_enemies,
                         command=lambda: (self.refresh_units(), self._save_settings())
-                        ).pack(anchor="w", pady=(0, 6))
-        self.unit_tree = scrolled_tree(side, columns=("lv",), show="tree headings",
+                        ).grid(row=2, column=0, sticky="w", pady=(0, 6))
+        self.unit_tree = scrolled_tree(side, columns=("number", "lv"), show="tree headings",
                                        selectmode="browse")
         self.unit_tree.heading("#0", text="Name", anchor="w")
         self.unit_tree.heading("lv", text="Lv", anchor="e")
+        self.unit_tree.heading("number", text="Unit #", anchor="e")
+        self.unit_tree.column("number", width=62, minwidth=55, anchor="e", stretch=False)
         self.unit_tree.column("#0", width=200, minwidth=140)
         self.unit_tree.column("lv", width=44, minwidth=40, anchor="e", stretch=False)
-        self.unit_tree.container.pack(fill="both", expand=True)
+        self.unit_tree.container.grid(row=3, column=0, sticky="nsew")
         self.unit_tree.bind("<<TreeviewSelect>>", self.on_unit_select)
         acts = ttk.Frame(side, style="Card.TFrame")
-        acts.pack(fill="x", pady=(8, 0))
+        acts.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        ttk.Button(acts, text="Add unit…", style="Small.TButton",
+                   command=self.open_add_unit).pack(fill="x", pady=(0, 6))
+        ttk.Button(acts, text="Change unit number…", style="Small.TButton",
+                   command=self.open_unit_number).pack(fill="x", pady=(0, 6))
         ttk.Button(acts, text="Copy unit in…", style="Small.TButton",
                    command=self.copy_unit_in).pack(fill="x")
         ttk.Button(acts, text="Remove unit", style="Small.TButton",
@@ -1038,8 +1081,9 @@ class App(AdvancedMixin, tk.Tk):
         return (self.register(lambda P: P == "" or (P.isdigit() and len(P) <= 7)), "%P")
 
     def _build_stats_tab(self):
-        tab = ttk.Frame(self.unit_tabs, style="Card.TFrame", padding=18)
-        self.unit_tabs.add(tab, text="Stats")
+        self.stats_scroll = ScrollableFrame(self.unit_tabs, style="Card.TFrame", padding=18)
+        self.unit_tabs.add(self.stats_scroll, text="Stats")
+        tab = self.stats_scroll.body
         self._stat_spins: list[ttk.Spinbox] = []
         vcmd = self._num_vcmd()
 
@@ -1198,8 +1242,10 @@ class App(AdvancedMixin, tk.Tk):
         ctl = ttk.Frame(left, style="Card.TFrame")
         ctl.pack(side="bottom", fill="x", pady=(10, 0))
         ttk.Label(left, style="CardFaint.TLabel", wraplength=420, justify="left",
-                  text="Every item has its own convoy slot. Add item… puts a stack in it and "
-                       "Remove empties a slot; the list keeps its slot count and everything "
+                  text="Every stackable item has its own convoy slot. Add item… puts a stack in it; "
+                       "gear that doesn't stack (weapons, tomes, shields, potions with "
+                       "several uses) gets one slot per copy, and Add refuses if they "
+                       "won't fit. Remove empties a slot; the list keeps its slot count and everything "
                        "after it is moved safely. All materials… stocks every ore, meat, "
                        "fish and plant at one quantity."
                   ).pack(side="bottom", anchor="w", pady=(8, 0))
@@ -1324,8 +1370,10 @@ class App(AdvancedMixin, tk.Tk):
         # the note is packed before the table so a short window shrinks the
         # table instead of pushing the buttons and the note out of sight
         ttk.Label(main, style="CardFaint.TLabel", justify="left", wraplength=620,
-                  text="Points are what the game turns into a support level: 3200 is the "
-                       "maximum (level 5). The save keeps a slot for every pair, so a pair "
+                  text="Points are what the game turns into a support level: levels 1-5 "
+                       "start at 0 / 400 / 1,400 / 2,400 / 3,200 points (3,200 is the "
+                       "maximum, confirmed in-game; the others come from the community "
+                       "table at annasnotebook.net). The save keeps a slot for every pair, so a pair "
                        "whose support hasn't opened yet still has a value here — the game may "
                        "not show it until it opens the relationship itself. “Seen” is the "
                        "save's 支援会話 flag for a conversation; Max is the highest rank the "
@@ -1365,17 +1413,21 @@ class App(AdvancedMixin, tk.Tk):
         self.sup_pt_lbl = ttk.Label(pts, text="", style="CardFaint.TLabel")
         self.sup_pt_lbl.pack(side="left", padx=(12, 0))
 
-        self.sup_tree = scrolled_tree(body, columns=("jp", "points", "max", "seen", "party"),
+        self.sup_tree = scrolled_tree(body, columns=("jp", "points", "lv", "next", "max", "seen", "party"),
                                       show="tree headings", selectmode="browse")
         self.sup_tree.heading("#0", text="Support partner", anchor="w")
         self.sup_tree.heading("jp", text="Japanese", anchor="w")
         self.sup_tree.heading("points", text="Points", anchor="e")
+        self.sup_tree.heading("lv", text="Lv", anchor="center")
+        self.sup_tree.heading("next", text="Next level at", anchor="e")
         self.sup_tree.heading("max", text="Max", anchor="center")
         self.sup_tree.heading("seen", text="Conversations seen", anchor="w")
         self.sup_tree.heading("party", text="In party", anchor="center")
         self.sup_tree.column("#0", width=180, minwidth=130)
         self.sup_tree.column("jp", width=140)
         self.sup_tree.column("points", width=64, anchor="e", stretch=False)
+        self.sup_tree.column("lv", width=40, anchor="center", stretch=False)
+        self.sup_tree.column("next", width=96, anchor="e", stretch=False)
         self.sup_tree.column("max", width=50, anchor="center", stretch=False)
         self.sup_tree.column("seen", width=160, stretch=False)
         self.sup_tree.column("party", width=74, anchor="center", stretch=False)
@@ -1543,6 +1595,8 @@ class App(AdvancedMixin, tk.Tk):
                 "", "end", text=partner_label,
                 values=(pa["jp"],
                         "—" if pts is None else f"{pts:,}",
+                        "—" if pts is None else supports.level_of(pts),
+                        self._next_level_text(pts),
                         pa["chart"].get("max") or "—",
                         ", ".join(got) if got else "—",
                         "✓" if ("PID_" + pa["jp"]) in party else ""),
@@ -1571,6 +1625,13 @@ class App(AdvancedMixin, tk.Tk):
             self.sup_tree.see(target)
             self.on_support_pair()
 
+    @staticmethod
+    def _next_level_text(pts) -> str:
+        if pts is None:
+            return "—"
+        nxt = supports.next_level_at(pts)
+        return "max" if nxt is None else f"{nxt:,}"
+
     def on_support_pair(self, _e=None):
         """Mirror the selected pair's points into the editor row."""
         if not hasattr(self, "sup_pt_var"):
@@ -1594,7 +1655,10 @@ class App(AdvancedMixin, tk.Tk):
         self.sup_pt_var.set("" if pts is None else str(pts))
         name = self.sup_tree.item(sel[0], "text")
         self.sup_pt_lbl.configure(
-            text=(f"{name}: {pts:,} of {supports.max_points():,} points")
+            text=(f"{name}: {pts:,} of {supports.max_points():,} points · "
+                  f"level {supports.level_of(pts)}"
+                  + (f", next at {supports.next_level_at(pts):,}"
+                     if supports.next_level_at(pts) else " (max)"))
             if pts is not None else f"{name}: no entry in this save")
 
     def _paint_support_tags(self):
@@ -1646,6 +1710,16 @@ class App(AdvancedMixin, tk.Tk):
             target = None
         elif sel == str(self.world_page):
             target = self.map_search
+        elif sel == str(self.tutorials_page):
+            target = self.tutorial_search
+        elif sel == str(self.fast_travel_page):
+            target = self.fast_travel_search
+        elif sel == str(self.facilities_page):
+            target = self.facility_search
+        elif sel == str(self.deeds_page):
+            target = self.deed_search
+        elif sel == str(self.boons_page):
+            target = self.boon_search
         if target is None:
             return
         target.focus_set()
@@ -1675,10 +1749,13 @@ class App(AdvancedMixin, tk.Tk):
         for name in os.listdir(folder):
             path = os.path.join(folder, name)
             if is_slot_name(name) and os.path.isfile(path):
-                out.append(path)
+                try:
+                    out.append((path, os.path.getmtime(path)))
+                except OSError:
+                    continue  # A game save can disappear between listing and stat.
         # Auto (the live save) first, then the rest newest first
-        out.sort(key=lambda pth: (os.path.basename(pth) != "Auto", -os.path.getmtime(pth)))
-        return out
+        out.sort(key=lambda row: (os.path.basename(row[0]) != "Auto", -row[1]))
+        return [path for path, _ in out]
 
     def _get(self, path: str) -> SaveFile | None:
         """Cached SaveFile; re-read from disk when the game changed it (and we didn't)."""
@@ -1713,7 +1790,7 @@ class App(AdvancedMixin, tk.Tk):
 
     def open_folder(self, folder: str, prefer: str | None = None):
         slots = self._slot_files(folder)
-        if not slots and prefer:
+        if not slots and prefer and os.path.isfile(prefer):
             slots = [prefer]
         if not slots:
             messagebox.showerror(APP_NAME, f"No Auto / Chapter_* / Route_* slots in\n{folder}")
@@ -1730,6 +1807,8 @@ class App(AdvancedMixin, tk.Tk):
                 self._get(pth)
             self._save_settings()
             target = os.path.abspath(prefer) if prefer else self._default_slot()
+            if target not in self.slot_paths:
+                target = self._default_slot()
             self._populate_slot_box()
             self.load(target)
         finally:
@@ -1751,8 +1830,14 @@ class App(AdvancedMixin, tk.Tk):
             star = "★ " if base == "Auto" else ""          # the live save
             # which lord / part / chapter the slot was saved in, read from the save
             route = layer.route_label(sv.payload) if sv else ""
+            try:
+                stamp = _fmt_time(os.path.getmtime(pth))
+            except FileNotFoundError:
+                stamp = "Missing on disk — cached copy" if sv else "Missing on disk"
+            except OSError:
+                stamp = "Unavailable on disk"
             labels.append(f"{mark}{star}{base}  ·  {route + '  ·  ' if route else ''}"
-                          f"{_fmt_time(os.path.getmtime(pth))}")
+                          f"{stamp}")
         self.slot_box.configure(values=labels)
         if self.sv is not None and self.sv.path in self.slot_paths:
             self.slot_box.current(self.slot_paths.index(self.sv.path))
@@ -1820,6 +1905,7 @@ class App(AdvancedMixin, tk.Tk):
         try:
             changed = [p for p in self.slot_paths if self._changed_on_disk(p)]
             if not changed:
+                self._populate_slot_box()  # Refresh missing/renamed-file labels too.
                 return
             clean = [p for p in changed if p not in self.dirty]
             if clean:
@@ -1870,6 +1956,32 @@ class App(AdvancedMixin, tk.Tk):
         if not self.dirty:
             self.flash("Nothing to save — no changes yet.")
             return True
+        missing = [p for p in self.dirty if not os.path.isfile(p)]
+        if missing:
+            messagebox.showerror(APP_NAME,
+                "Nothing saved. These edited slots were removed or renamed on disk:\n\n"
+                + "\n".join(os.path.basename(p) for p in sorted(missing))
+                + "\n\nYour edits are still in memory. Restore the original file(s) before saving, "
+                  "or use Reload to discard the edits and read the current folder.", parent=self)
+            self._populate_slot_box()
+            return False
+        import story_files
+        try:
+            chapter_writes = story_files.prepare(self.files, self.dirty)
+        except Exception as exc:  # noqa: BLE001 — preflight must not write anything
+            messagebox.showerror(APP_NAME, f"Nothing saved:\n\n{exc}", parent=self)
+            return False
+        for plan in chapter_writes.values():
+            if plan.previous is not None and not messagebox.askyesno(
+                    "Replace chapter start file?",
+                    f"{os.path.basename(plan.target)} already exists.\n\n"
+                    "Replace it with this staged chapter-start state? The existing "
+                    "file will first be kept as .bak, or the next numbered .bak "
+                    "if an earlier backup exists.\n\nNo cancels this Save; all edits "
+                    "and the chapter-file request remain pending.",
+                    parent=self, icon="warning"):
+                self.flash("Nothing saved — the existing chapter file was kept.", "warn")
+                return False
         newer = [p for p in self.dirty if self._changed_on_disk(p)]
         if newer and not messagebox.askyesno(
                 APP_NAME, "The game has saved " + ", ".join(os.path.basename(p) for p in newer)
@@ -1886,7 +1998,21 @@ class App(AdvancedMixin, tk.Tk):
             if not sv:
                 continue
             try:
+                plan = chapter_writes.get(pth)
+                if plan:
+                    story_files.check_unchanged(plan)
+                    if story_files.path_key(plan.target) != story_files.path_key(pth):
+                        story_files.write(plan)
+                        # A completed file is not repeated if the source save fails.
+                        story_files.completed(self, sv)
+                        self.files.pop(plan.target, None)
+                        self._get(plan.target)
+                        if plan.target not in self.slot_paths:
+                            self.slot_paths.append(plan.target)
+                        written.append(os.path.basename(plan.target))
                 sv.save(pth)
+                if plan:
+                    story_files.completed(self, sv)
                 self.mtimes[pth] = os.path.getmtime(pth)
                 self.dirty.discard(pth)
                 written.append(os.path.basename(pth))
@@ -1895,12 +2021,13 @@ class App(AdvancedMixin, tk.Tk):
         self._populate_slot_box()
         self._update_file_label()
         self._update_dirty()
+        self.refresh_story()
         if failed:
             messagebox.showerror(APP_NAME, "Some slots could not be written:\n\n"
                                  + "\n".join(failed) + "\n\nIs the game still running?")
             return False
-        self.flash(f"Saved {', '.join(written)}. Originals kept as .bak next to each slot.",
-                   "ok")
+        self.flash(f"Saved {', '.join(written)}. The copy each save replaced is kept next "
+                   "to it as a numbered .bak.", "ok")
         return True
 
     def on_close(self):
@@ -1930,17 +2057,13 @@ class App(AdvancedMixin, tk.Tk):
         return {u.uid for u in sv.units if not is_enemy(u)}
 
     def _same_route(self, other: SaveFile) -> bool:
-        """True when `other` holds the same playthrough as the open slot.
-
-        Each lord's route has its own party, convoy and gold (Auto may be
-        Theodora's route while Route_Ism is Ishmael's).  Slots of one route
-        share most of their party — an older Chapter_* slot just has fewer
-        members — so at least half of the smaller party must overlap.
-        """
-        a, b = self._party(self.sv), self._party(other)
-        if not a or not b:
+        """Match explicit character, part and playthrough, not party overlap."""
+        a, b = layer.route_info(self.sv.payload), layer.route_info(other.payload)
+        if not a or not b or a[:2] != b[:2]:
             return False
-        return len(a & b) * 2 >= min(len(a), len(b))
+        sa = core.read_settings(core.SaveFile(self.sv.payload))
+        sb = core.read_settings(core.SaveFile(other.payload))
+        return sa is not None and sb is not None and sa[0] == sb[0]
 
     @staticmethod
     def _is_checkpoint(path: str) -> bool:
@@ -1959,7 +2082,7 @@ class App(AdvancedMixin, tk.Tk):
             return []
         out = []
         for pth in self.slot_paths:
-            if pth == self.sv.path or self._is_checkpoint(pth):
+            if pth == self.sv.path or self._is_checkpoint(pth) or not os.path.isfile(pth):
                 continue
             sv = self._get(pth)
             if sv is not None and self._same_route(sv):
@@ -2032,6 +2155,11 @@ class App(AdvancedMixin, tk.Tk):
         q = self.unit_search.get_query().lower()
         units = sorted(self._unit_map().values(),
                        key=lambda u: (is_enemy(u), u.name.lower()))
+        import unit_entries
+        try:
+            numbers={u.person:g.unit_number for u,g in unit_entries.roster(self.core_of())} if self.sv else {}
+        except core.SaveError:
+            numbers={}
         shown = 0
         for u in units:
             enemy = is_enemy(u)
@@ -2045,7 +2173,7 @@ class App(AdvancedMixin, tk.Tk):
             label = unit_names_zh.display_name(u.name, u.pid, chinese=i18n.get_language() == "zh_CN")
             tree.insert("", "end", iid=str(u.uid), text=" " + label,
                         image=self._dot(_name_color(u.name), 10),
-                        values=(u.level,), tags=("enemy",) if enemy else ())
+                        values=(numbers.get(u.uid, '—'), u.level), tags=("enemy",) if enemy else ())
             shown += 1
         total = sum(1 for u in units if self.show_enemies.get() or not is_enemy(u))
         self.unit_count.configure(text=f"{shown}" if shown == total else f"{shown} / {total}")
@@ -2470,7 +2598,7 @@ class App(AdvancedMixin, tk.Tk):
         prev = select if select is not None else [int(i) for i in tree.selection()
                                                   if i.isdigit()]
         tree.delete(*tree.get_children())
-        conv = live_convoy(bytes(self.sv.payload)) if self.sv else None
+        conv = live_convoy(self.core_of()) if self.sv else None
         # live_convoy() returns every slot; only the filled ones are items
         self._conv_rows = [r for r in (conv.rows if conv else []) if r.qty and r.iid]
         names = item_ids()
@@ -2529,7 +2657,6 @@ class App(AdvancedMixin, tk.Tk):
                 "Undo can take it back, and the original stays in the slot's .bak.",
                 parent=self):
             return
-        self.push_undo()
         if self._core_edit(lambda f: (layer.repair_convoy(f.payload) >= 0 and f.payload) or None,
                            "Repair convoy"):
             self.flash(f"Convoy repaired: {n_items} items, {got[0]} slots — Ctrl+S to write it.",
@@ -2602,6 +2729,21 @@ class App(AdvancedMixin, tk.Tk):
         qty = self._qty()
         if qty is None:
             return
+        # gear (weapons, tomes, shields…) never stacks: its quantity is the number of
+        # slots holding a copy, so those rows are handled by adding/removing slots
+        gear = sorted({self._conv_row(s).iid for s in slots
+                       if self._conv_row(s) and not layer.stacks(self._conv_row(s).iid)})
+        if gear:
+            for iid in gear:
+                if not self._core_edit(
+                        lambda f, i=iid: (layer.set_convoy_copies(f.payload, i, qty)
+                                          and f.payload) or None,
+                        f"Convoy: {item_label(iid)} ×{qty} (one slot per copy)"):
+                    break
+            slots = [s for s in slots if self._conv_row(s) and layer.stacks(self._conv_row(s).iid)]
+            if not slots:
+                self.refresh_convoy()
+                return
         n = self._convoy_edit(slots, lambda p, r: set_convoy_qty(p, r, qty))
         self.refresh_convoy(select=slots)
         self.flash(f"Quantity → {qty} on {len(slots)} row(s)" + (f" in {n} saves" if n > 1 else ""))

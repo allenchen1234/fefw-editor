@@ -7,30 +7,95 @@ library, or a ready-made Windows `.exe`.
 
 > **Unofficial and reverse-engineered.** Close the game before saving and keep
 > your own backup. The first save next to each slot also keeps the untouched
-> original as `<slot>.bak`.
+> original as `<slot>.bak`, and every save after that keeps the copy it replaced
+> as `<slot>.bak1`, `.bak2` and so on (highest number = newest), so a game
+> auto-save that landed between two editor saves is never lost. Backups are
+> never deleted or renamed; clear out old ones yourself when you like.
 
 ![Units page](docs/units.png)
 
 ## What you can edit
 
-| Page | Tab | What |
-|---|---|---|
-| **Units** | Stats | Level, EXP, max HP, and the points each of the nine stats has gained from level-ups (see *Stats* below) |
-| | Arts & skills | All six skill lists in the unit's record (equipped arts, equipped skills, arts known, everything learned…), by name, with add / remove |
-| | Inventory | Swap, add or remove a carried item, picked from a searchable catalogue. Known spells are listed separately |
-| | Class | Pick any class the game knows. It's added to the unit's own class list, the way the game does it |
-| **Convoy** | | Everything in storage, materials included: add a stack, stock every material at once, swap the item in any row, change its quantity, remove a row, and repair a list damaged by older versions |
-| **Gold** | | Set gold |
-| **Player** | | Gold, renown exp and Karma Shards; difficulty, mode and playthrough number (written into every slot, since they belong to the run) |
-| **Classes** | | A unit's whole class list (set the current class, add, swap or remove one, set its exp) and its weapon masteries with their rank (E … S+) and exp — a range of masteries can be given the same exp at once |
-| **Supports** | | Every character's support partners with the **points** this save holds for the pair, the highest rank the game defines, and which conversations this save has recorded. Set the points (0 … 3200) and the game works the level out from them. **Record conversation as seen** writes that conversation's flag |
-| **Mounts** | | The battalion and mount each unit carries, chosen from the save's pool |
-| **World map** | | Which of the map's places, junctions and road points the save has **shown** or hides, and which places are marked **visited** (white versus dark icon). Show or hide a selection, a whole road, or every place / road at once. See *World map* below |
-| **Flags** | | Every named variable the save stores: support conversations, recruited / met, achievements, feature and class unlocks. Search, filter, set, add, remove |
+| Page | What |
+|---|---|
+| **Units** | Level, EXP, HP and stat gains; carried items; classes; arts and skills. Add a character from the catalogue, copy one from another save, remove one, restore recruitment, or change its **Unit #**, with duplicate checks. |
+| **Convoy** | Add, swap or remove items and materials (including Building Materials), change quantities, stock all materials, and repair damaged storage lists. |
+| **Player** | Gold, renown EXP and Karma Shards; difficulty, mode and playthrough number; Part 1/2 and Eshmel Part 3 chapter selection, optional chapter-start files, and **Troubleshoot Progress**. |
+| **Classes** | Current and learned classes, class EXP, weapon ranks and mastery EXP, with batch editing. |
+| **Supports** | Support points, current level and next-level requirements, and recorded conversations. |
+| **Mounts** | The battalion and mount each unit carries, chosen from the save's pool. |
+| **World map** | Show or hide places and roads, and mark places visited. |
+| **Tutorials** | Make tutorial records available or remove them, with category, state and name-evidence filters. |
+| **Blessings** | Stored EXP for all seven gods and available first-audience controls. |
+| **Fast travel** | Add or remove identified Dagsion destinations. |
+| **Functions** | Facility and feature availability, area access, and city movement restrictions. |
+| **Notable Deeds** | Progress counters and milestone information, with claim states and rewards shown separately. |
+| **Boons** | Set tiers, remove ownership, switch owned Boons On/Off, or set all to maximum. |
+| **Flags** | Search and edit named save variables, including recruitment, conversations and unlocks. English names appear beside the original Japanese identifiers. |
 
-Units can also be **copied in** from another slot or **removed**. Every edit can
-be undone (Ctrl+Z / Ctrl+Y), and **Snapshot** / **Restore…** keep copies of the
-whole save folder.
+Edits support **Undo/Redo** (Ctrl+Z / Ctrl+Y). **Snapshot** / **Restore…** keep
+copies of the whole save folder. Frequently used save data is cached to keep
+switching pages and editing large lists responsive. The window sizes to fit your
+screen; longer forms and previews scroll, action buttons stay visible, and
+**Go to tab** reaches every page when the tab strip is too wide.
+
+### Story progression
+
+Chapter selection is available from **Player → Story progression…**:
+
+| Story | Available chapters |
+|---|---|
+| Leda Part 1 | 2–12 |
+| Cai Part 1 | 1–12 |
+| Dietrich Part 1 | 3–12 |
+| Theodora Part 1 | 1–12 |
+| All four routes, Part 2 | 1–6 |
+| Eshmel Part 3 | 2–6, on existing Eshmel Part 3 saves only |
+
+Leda Part 1 Chapter 1, Dietrich Part 1 Chapters 1–2 and Eshmel Part 3 Chapter 1
+are unavailable because replay can block progression. Start Part 3 Chapter 1
+naturally through the Obelisk door. Part 3 Chapters 2–5 passed their opening and
+next story event; Chapter 6 was checked only as far as its opening battle.
+Complete playthroughs and every Obelisk checkpoint have not been validated.
+
+Chapter selection preserves your party and earlier progress; it does not grant
+all skipped units, facilities or quests. Known access fixes are applied where
+needed, including Part 2 temple and midtown access. Theodora Part 1 Chapter 6
+may still require the alternate route around the city barrier. **Troubleshoot
+Progress** reads the current character, part and chapter and offers a known
+repair where one exists. If none is known, it points to the upstream issue page.
+
+**Try Part 2 entry…** offers experimental entry from a supported Part 1 save.
+It does not reproduce the whole native transition or create the separate
+`Part_<lord>_2` handoff file. Part 3 selection does not create missing route
+completion or carryover state. Story changes and troubleshooting apply only to
+the selected save, even when mirroring is enabled.
+
+You can optionally create the selected chapter's checkpoint file when saving.
+Existing files require confirmation and receive a backup. Battle states are
+not supported for story changes.
+
+### Adding units
+
+**Add unit…** uses each enabled character's level-one defaults. It checks for
+existing characters and allocates an unused unit number. **Restore recruitment**
+re-enables the relevant flags for an existing eligible record while retaining
+its stats and inventory; it is not a general revival feature. Manual number
+changes also reject collisions.
+
+The catalogue has **67 enabled characters**, including special characters with
+individual notes. Add Unit and recruitment restoration support the four Part
+1/2 routes and Eshmel Part 3 in recognized **free-time, normal pre-battle and
+chapter-start** saves. Pre-battle additions show a warning: units may have
+reduced HP/stats or be absent from the editor view. Mid-battle additions are
+disabled; world-map battle states are unsupported. Copying and renumbering
+remain limited to free-time saves.
+
+Some characters need equipment from the convoy. Anna starts dismounted; mounted
+deployment has also worked in Part 3, but remounting and map eligibility are not
+established. Eshmel's special entry has a helmeted portrait and a generic
+unhelmeted battle model. Read each character's preview for its limitations;
+these entries are not a guarantee of natural recruitment or every story context.
 
 ### Stats
 
@@ -63,8 +128,7 @@ no record changes size.
 
 The byte layout and the behaviour of the two bytes were worked out by
 [@Destorino5](https://github.com/Destorino5) in
-[#27](https://github.com/Antiadvocate/fefw-editor/issues/27); see
-[`docs/world-map.md`](docs/world-map.md).
+[#27](https://github.com/Antiadvocate/fefw-editor/issues/27).
 
 ### Not supported (yet)
 
@@ -81,47 +145,59 @@ If you know where any of these live, contributions are welcome.
 
 ## Download
 
-Get the latest build from the
-[**Releases page**](https://github.com/Antiadvocate/fefw-editor/releases/latest):
+The [upstream releases](https://github.com/Antiadvocate/fefw-editor/releases/latest)
+provide Windows and Linux builds. Their included features depend on the release;
+run this branch from source to use everything listed above.
 
-* **Windows:** `FEFW-Save-Editor-<version>-windows.zip`. Unzip it anywhere you
-  can write to and run `FEFW Save Editor.exe`; no Python needed. The exe isn't
-  code-signed, so SmartScreen may ask you to click *More info → Run anyway*.
-* **Linux (x86-64):** `FEFW-Save-Editor-<version>-linux-x86_64.tar.gz`. No
-  Python or pip needed. Extract it to a folder you can write to and run
-  `./fefw-save-editor`:
+* **Windows:** unzip the Windows package and run `FEFW Save Editor.exe`.
+  Python is not required. The executable is not code-signed, so SmartScreen
+  may ask for confirmation.
+* **Linux (x86-64):** extract the Linux package and run `./fefw-save-editor`.
+  It requires glibc 2.35 or newer and runs under X11 or XWayland.
+* **macOS / other platforms:** run from source below.
 
-  ```
-  tar xzf FEFW-Save-Editor-*-linux-x86_64.tar.gz
-  cd FEFW-Save-Editor-*/
-  ./fefw-save-editor
-  ```
-
-  It needs glibc 2.35 or newer (Arch, Fedora, Debian 12, Ubuntu 22.04, Mint 21
-  and later all qualify). It runs under X11 or XWayland.
-* **Anything else (macOS, ARM):** `…-source.zip`, then see *Running from source*.
+Keep the editor in a folder you can write to; its settings are saved beside it.
 
 ## Running from source
 
-```
-pip install -r requirements.txt
-python editor.py
+Use **Python 3.10 or later**, with Tkinter and `zstandard`. Python 3.10 and 3.12
+are the versions used for validation; Python 3.12 is recommended.
+
+With Python 3.12 and Tkinter installed, on Linux/macOS:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python editor.py
 ```
 
-On Arch and other distros that block system-wide `pip install`, install the
-two dependencies from the distro instead and skip pip:
+On Windows:
 
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe editor.py
 ```
+
+Alternatively, use your distro packages:
+
+```sh
+# Arch
 sudo pacman -S tk python-zstandard
 python editor.py
+
+# Debian / Ubuntu
+sudo apt install python3-tk python3-zstandard
+/usr/bin/python3 -s editor.py
 ```
 
-(Debian/Ubuntu: `sudo apt install python3-tk python3-zstandard`.) Or use a
-virtual environment: `python -m venv .venv && .venv/bin/pip install -r
-requirements.txt && .venv/bin/python editor.py`.
+On Bazzite, the Debian/Ubuntu commands can be used inside an Ubuntu Distrobox.
+The Windows `FEFW Save Editor.bat` launcher also works once its Python has the
+dependencies installed. To open a particular save folder or slot:
 
-or double-click **FEFW Save Editor.bat** on Windows. Python 3.10+. You can also
-pass a save folder (or any slot file in it): `python editor.py "C:\path\to\save"`.
+```sh
+python editor.py "/path/to/save"
+```
 
 Use the **中文 / English** button in the top-right corner to switch the entire
 interface between English and Simplified Chinese. The selected language is
@@ -147,8 +223,8 @@ Otherwise use **Open folder…** and pick any slot file inside it.
   played, and it opens first. `Route_<lord>` (e.g. `Route_Ism`) holds that
   lord's route while you play someone else. `Chapter_<lord>_<part>_<chapter>`
   are chapter checkpoints, the points the game's "go back in time" feature
-  returns to. `Part_<lord>_<part>` are part checkpoints. `Global` holds settings
-  only. The slot list shows the lord, part and chapter each slot was saved in
+  returns to. `Part_<lord>_<part>` are part checkpoints. `Global` is maintained separately by the game; its progression and carryover
+  data are not fully mapped by this editor. The slot list shows the lord, part and chapter each slot was saved in
   (e.g. `★ Auto · Theodora P1 Ch12`), read from the save itself; ★ marks `Auto`.
 * **Edit `Auto`.** It's the save the game continues from, so editing it alone is
   enough.
@@ -157,11 +233,17 @@ Otherwise use **Open folder…** and pick any slot file inside it.
   the live unit, convoy and gold; those copies keep their values, so rewinding
   still takes you back to what was really there. Run settings (difficulty, mode,
   playthrough number) are the exception: they apply to the whole run and are
-  written into every copy.
+  written into every copy. Story progression deliberately clears old internal
+  restart snapshots so the game can rebuild the selected chapter start.
 * **"Also edit this route's other saves"** (off by default) also writes each edit
-  into the same route's other live saves, e.g. that lord's `Route_*`. Another
-  lord's route and every `Chapter_*` checkpoint are never touched. Open a
-  checkpoint to edit it on its own.
+  into matching live saves of the same character, part and playthrough, e.g.
+  that lord's `Route_*`. This includes Tutorials, Blessings/audiences, Fast
+  Travel, Notable Deeds, Boons, Add Unit, Functions and named flag edits, as well
+  as existing unit, inventory, map and support edits. Targets are checked before
+  applying the added features' edits, and Undo/Redo restores them together.
+  Another route/part/playthrough and every `Chapter_*` checkpoint are excluded. Open a
+  checkpoint to edit it on its own. The separate Story progression checkbox can
+  create or replace its selected chapter file on Save, with confirmation and backup.
 * **Nothing is written until you press Save** (Ctrl+S). Slots with unsaved
   edits get a ● in the slot list, and quitting with unsaved edits asks first.
 * **Reload (F5)** re-reads every slot from disk. When you switch back to the
@@ -222,6 +304,7 @@ PNGs into `icons/items/` and `icons/units/` to use real images; see
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+O | Open a save folder |
 | Ctrl+F | Jump to the search box on the current page |
+| Ctrl+Tab / Ctrl+Shift+Tab | Move between pages |
 | Ctrl+A | Select every row in the table you last clicked |
 | Shift+click / Shift+drag | Select a range of rows (convoy, classes, masteries, flags…) |
 | F5 | Reload every slot from disk (asks first if you have unsaved edits) |
@@ -243,44 +326,35 @@ PNGs into `icons/items/` and `icons/units/` to use real images; see
 * Built and tested against saves from one game version. Another version may need
   the name tables rebuilt; unknown ids then show as `unknown <hash>`.
 
+* Tutorial records and menu visibility are separate: the game can hide
+  scenario-specific entries or unlock tutorials again during play.
+* Showing a map point or travel destination does not necessarily unlock its
+  facility, gate or story event. Functions exposes separate controls where known.
+* Fortuna's Blessings EXP effect is unknown. Divine Sand and selection are
+  read-only; other gods have known level previews.
+* Deed counter changes preserve reward claim records and currency. Lowering
+  progress below a claimed milestone can make the game clear that claim.
+* Inferred mappings remain labelled in the editor; they are not guarantees of
+  in-game behavior.
+
 ## Files
 
-```
-editor.py            the GUI
-editor_advanced.py   Arts & skills, Player, Classes, Supports, Flags and Mounts pages
-item_names_zh.py     Simplified Chinese item names and forge-level handling
-class_names_zh.py    Simplified Chinese class names keyed by Japanese class IDs
-unit_names_zh.py     Simplified Chinese names for identified characters
-skill_names_zh.py    Simplified Chinese combat art and skill names
-ui_util.py           table helpers: Ctrl+A and Shift+drag range selection
-fefw_core.py         the save's record tree: blocks, units, resizing edits, convoy, mounts, flags
-fefw_layer.py        what the GUI uses: units, items, skills, convoy and gold through fefw_core
-fefw_save.py         save container (decompress, checksums, write), ids and labels, small CLI
-supports.py          support pair chart, conversation-flag and support-point lookup
-unit_ids.json        person id -> name
-item_ids.json        item id   -> Japanese + English name
-job_ids.json         class id  -> Japanese + English name
-skill_ids.json       skill id  -> Japanese + English name
-supports.json        support pair -> highest rank and its conversation flags
-support_points.json  support pair hash -> the two characters it joins (2628 pairs)
-flag_names.json      flag id   -> readable name
-map_spots.json       map point hash -> name, kind, position; the road chains
-worldmap.py          reads and edits the save's map points (GmapSpotMgr)
-map_page.py          the World map page
-build_map_spots.py   rebuilds map_spots.json from a romfs dump
-build_skill_ids.py   rebuilds skill_ids.json from a romfs dump
-build_item_names.py  puts the game's official English item names into item_ids.json
-build_unit_names.py  English names for generic units, enemies and NPCs in unit_ids.json
-msbt.py              reads the game's message files (used by the build scripts)
-build_flag_names.py  rebuilds flag_names.json from a romfs dump
-icons/               optional item / unit images
-requirements.txt     zstandard
-FEFW Save Editor.bat launcher (source install)
-.github/workflows/   release build
-```
+| Files | Purpose |
+|---|---|
+| `editor.py`, `editor_advanced.py`, `*_page.py` | Interface and feature pages |
+| `fefw_core.py`, `fefw_layer.py`, `fefw_save.py` | Save parsing, edits, checksums and writing |
+| Feature modules and `.json` catalogues | Units, story, supports, maps, tutorials, blessings, functions, deeds and Boons |
+| `build_*.py`, `msbt.py` | Rebuild name and item tables from your own game dump |
+| `icons/` | Optional item and unit images |
+| `requirements.txt`, `FEFW Save Editor.bat` | Source dependencies and Windows launcher |
+| `.github/workflows/` | Source checks and release packaging |
 
-`editor_settings.json` (theme, last folder, options) is created next to the
-editor, or next to the `.exe` / Linux binary, on first use.
+`editor_settings.json` is created beside the editor on first use.
+Research scripts, test suites and development reports are retained on the
+[feature branches](https://github.com/Destorino5/fefw-editor/branches), including
+[Part 3 story](https://github.com/Destorino5/fefw-editor/tree/feature/part3-story),
+[Part 2 story](https://github.com/Destorino5/fefw-editor/tree/feature/part2-story)
+and [unit creation](https://github.com/Destorino5/fefw-editor/tree/feature/unit-creation).
 
 ### Rebuilding the name tables
 
