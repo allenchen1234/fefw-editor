@@ -1,5 +1,6 @@
 """Tutorials page; mirrored edits with grouped Undo/Redo."""
 from tkinter import ttk
+import i18n
 
 import tutorials
 import fefw_core as core
@@ -85,14 +86,15 @@ class TutorialPageMixin:
             self.tutorial_count.configure(text=str(exc))
             return
         q = self.tutorial_search.get().strip().casefold()
-        category = self.tutorial_category.get(); state = self.tutorial_state.get()
-        evidence = self.tutorial_evidence.get()
+        category = ('All categories', *tutorials.CATEGORIES)[self.tutorial_category.current()]
+        state = ('All states', 'Absent', 'Stored (2)', 'Present (1)', 'Unknown')[self.tutorial_state.current()]
+        evidence = ('All names', 'Game title checked', 'Provisional name')[self.tutorial_evidence.current()]
         for h, row in cat.items():
             label = tutorials.state_label(values.get(h)); name_evidence = tutorials.evidence_label(row)
             if category != 'All categories' and row['category'] != category: continue
             if evidence != 'All names' and name_evidence != evidence: continue
             if state != 'All states' and not (label.startswith('Unknown') if state == 'Unknown' else label == state): continue
-            if q and q not in f"{row['label']} {row['name']} {h:08x}".casefold():
+            if q and q not in f"{row['label']} {i18n.tr(row['label'])} {row['name']} {h:08x}".casefold():
                 continue
             tree.insert("", "end", iid=f"{h:08x}", text=row["label"],
                         values=(row['category'], label, name_evidence, row["name"], f"{h:08x}"))
@@ -118,7 +120,7 @@ class TutorialPageMixin:
             note = ('English title is provisional and absent from the supplied screenshots. If it appears during normal play, a title screenshot would help confirm it.'
                     if row['evidence'] == 'provisional-translation' else
                     'English title, category and order match the supplied in-game screenshots. This verifies the name, not feature unlocks or availability on every route.')
-            text = (row['label'] + ' · ' + tutorials.evidence_label(row) + '\n' + note
+            text = (i18n.tr(row['label']) + ' · ' + tutorials.evidence_label(row) + '\n' + note
                     + '\n' + tutorials.visibility_note(row))
         elif picked:
             text = f'{len(picked)} tutorials selected. The whole selection changes together; unknown saved states are preserved by refusing the batch.'

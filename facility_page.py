@@ -1,5 +1,6 @@
 """Facility switches and read-only access diagnostics for the selected save."""
 from tkinter import ttk
+import i18n
 
 import facilities
 import facility_access
@@ -87,10 +88,11 @@ class FacilityPageMixin:
             values = facilities.read(f)
         except core.SaveError as exc:
             self.facility_count.configure(text=str(exc)); return
-        q = self.facility_search.get().strip().casefold(); kind = self.facility_kind.get()
+        q = self.facility_search.get().strip().casefold()
+        kind = ('All switches', 'Service', 'Gate registration', 'Journal', 'Area access')[self.facility_kind.current()]
         for h, row in cat.items():
             if kind != 'All switches' and row['kind'] != kind: continue
-            if q and q not in f"{row['label']} {row['name']} {h:08x}".casefold(): continue
+            if q and q not in f"{row['label']} {i18n.tr(row['label'])} {row['name']} {h:08x}".casefold(): continue
             tree.insert('', 'end', iid=f'{h:08x}', text=row['label'], values=(row['kind'],
                 facilities.state_label(h, values.get(h)), row['coverage'], row['name'], f'{h:08x}'))
         tree.selection_set([i for i in keep if tree.exists(i)])

@@ -1,5 +1,6 @@
 """Single-counter Notable Deeds edits with normal save and undo controls."""
 from tkinter import messagebox, ttk
+import i18n
 
 import deeds
 import fefw_core as core
@@ -88,7 +89,7 @@ class DeedPageMixin:
                 state = values.get(int(tier["hash"], 16))
                 claimed += state == 4
                 unclaimed += state == 2
-                if q and q not in f"{row['label']} {row['category']} {row['name']} {h:08x} {tier['name']} {tier['hash']} {tier['target']}".casefold():
+                if q and q not in f"{row['label']} {i18n.tr(row['label'])} {row['category']} {row['name']} {h:08x} {tier['name']} {tier['hash']} {tier['target']}".casefold():
                     continue
                 iid = tier["hash"]
                 self._deed_rows[iid] = (h, tier)

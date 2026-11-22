@@ -20,7 +20,10 @@ if errorlevel 1 goto :failed
 "%PYTHON%" -m PyInstaller --clean --noconfirm --onefile --windowed --name "FEFW Save Editor" ^
     --add-data "unit_ids.json;." --add-data "item_ids.json;." --add-data "job_ids.json;." ^
     --add-data "supports.json;." --add-data "support_points.json;." ^
-    --add-data "flag_names.json;." --add-data "skill_ids.json;." --add-data "map_spots.json;." editor.py
+    --add-data "flag_names.json;." --add-data "skill_ids.json;." --add-data "map_spots.json;." ^
+    --add-data "tutorial_names.json;." --add-data "facility_names.json;." --add-data "deed_names.json;." ^
+    --add-data "boon_catalog.json;." --add-data "fast_travel_names.json;." --add-data "unit_catalog.json;." ^
+    --add-data "item_stack.json;." editor.py
 if errorlevel 1 goto :failed
 
 echo.

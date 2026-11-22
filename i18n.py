@@ -215,6 +215,58 @@ PHRASES = [
 ]
 
 
+
+from new_feature_names_zh import NAMES as _FEATURE_NAMES_ZH
+ZH.update(_FEATURE_NAMES_ZH)
+ZH.update({
+    'Tutorials': '教程', 'Blessings': '加护', 'Functions': '功能',
+    'Notable Deeds': '伟业录', 'Boons': '救世的祝福', 'Boons of Salvation': '救世的祝福',
+    'Karma Shards': '因果碎片', 'Add to save': '添加到存档', 'Remove selected': '移除所选项', 'Select shown': '选择显示项',
+    'All categories': '所有类别', 'All names': '所有名称', 'All states': '所有状态', 'Absent': '未保存', 'Stored (2)': '已存储（2）', 'Present (1)': '存在（1）', 'Unknown': '未知',
+    'Game title checked': '游戏标题已核对', 'Provisional name': '暂定名称', 'Name evidence': '名称依据', 'Stored state': '存储状态', 'Category': '类别',
+    'Battle': '战斗', 'Bases': '据点', 'The World Map': '世界地图', 'Dungeons': '迷宫', 'Flame Lords': '真焰将', 'Scenario-specific': '特定剧情',
+    'God': '神明', 'Stored EXP': '已存经验值', 'Level preview': '等级预览', 'Selected (stored)': '已选择（存储值）', 'First audience': '首次觐见', 'First audience recorded': '已记录首次觐见', 'New EXP': '新经验值', 'Apply EXP': '应用经验值', 'Special / unknown': '特殊／未知', 'Yes (1)': '是（1）', 'No (0)': '否（0）',
+    'Fortuna': '芙托娜', 'Mars': '玛兹', 'Credna': '克蕾尔', 'Kalla': '卡拉', 'Jurah': '朱拉', 'Smyrnos': '斯米尔诺斯', 'Aurora': '奥萝拉',
+    'Saved switches': '已存开关', 'Access conditions': '进入条件', 'Function switches': '功能开关', 'All switches': '所有开关', 'Service': '设施服务', 'Gate registration': '神殿大门登记', 'Journal': '冒险手册', 'Area access': '区域进入', 'Enable selected': '启用所选项', 'Disable selected': '禁用所选项', 'Copy diagnostics': '复制诊断信息', 'Function / facility': '功能／设施', 'Saved switch': '存储的开关', 'Saved evidence': '存储依据', 'Route / prerequisite': '路线／前提条件', 'Access / entrance': '进入／入口', 'Inferred': '推测', 'Game-tested': '游戏内已测试', 'Conditional pass': '有条件通过',
+    'New total': '新累计值', 'Apply progress': '应用进度', 'Use selected target': '使用所选目标值', 'Activity · milestone target': '活动 · 里程碑目标', 'Claim state (stored)': '领取状态（存储值）', 'Milestone hash': '里程碑哈希', 'Counter editing': '计数器编辑', 'Previously claimed rewards': '先前领取的奖励', '0 (not stored)': '0（未存储）',
+    'Set selected tier': '设置所选等级', 'Set all to max': '全部设为最高等级', 'Turn on': '启用', 'Turn off': '停用', 'Remove Boon': '移除祝福', 'Game cost': '游戏内花费', 'Required clears': '所需通关次数', 'Saved state': '存储状态', 'Not owned': '未拥有', 'Tier': '等级', 'Evidence': '依据', 'Effect': '效果',
+    'Open a save to see its tutorials.': '打开存档以查看教程。', 'Open a save to see its blessings.': '打开存档以查看加护。', 'Open a save to see its saved function switches.': '打开存档以查看已存功能开关。', 'Open a save to inspect access conditions.': '打开存档以查看进入条件。', 'Open a save to see its Notable Deeds.': '打开存档以查看伟业录。', 'Open a save to inspect its Boons.': '打开存档以查看救世的祝福。',
+    'Select a tutorial for its naming evidence.': '选择教程以查看名称依据。', 'Select a god to edit its stored EXP.': '选择神明以编辑已存经验值。', 'Select a god to inspect its first-audience condition.': '选择神明以查看首次觐见条件。', 'Select a switch to see its evidence and limits.': '选择开关以查看依据和限制。', 'Select a destination for the known conditions.': '选择目的地以查看已知条件。', 'Select a milestone to view its activity total. Rewards and claim states are read-only.': '选择里程碑以查看活动累计值。奖励和领取状态为只读。',
+    'Read-only data conditions. Arena has no verified saved switch yet. Recorded flags do not guarantee access.': '以下条件为只读数据。竞技场尚无经验证的存档开关；记录的标记不保证能够进入。',
+    'You are about to unclaim some previously claimed rewards. Continue anyway?': '此操作可能导致已领取的部分奖励被游戏重置为未领取。仍要继续吗？',
+    'Select one or more tutorials first.': '请先选择一个或多个教程。', 'Select one or more function switches first.': '请先选择一个或多个功能开关。', 'Select one god first.': '请先选择一位神明。', 'Select one milestone first.': '请先选择一个里程碑。', 'Select a Boon tier first.': '请先选择祝福等级。', 'Select the owned Boon tier first.': '请先选择已拥有的祝福等级。', 'Open a save first.': '请先打开存档。',
+    'EXP must be a whole number from 0 to 65535.': '经验值必须是 0 到 65535 之间的整数。', 'Enter a whole-number activity total.': '请输入整数活动累计值。',
+})
+PHRASES.extend([
+    ('Edit one god at a time. Level previews use game-data thresholds; Fortuna is special. The audience toggle changes only the first-talk flag; other access conditions may still apply. Audience edits leave EXP, selected blessings, Divine Sand and travel destinations unchanged.', '每次编辑一位神明。等级预览使用游戏数据中的阈值；芙托娜属于特殊情况。首次觐见开关只改变首次对话标记，其他进入条件仍可能生效。修改首次觐见不会改变经验值、已选加护、天刻白沙或移动目的地。'),
+    ('Threshold buttons fill New EXP; click Apply EXP to use that value.', '阈值按钮会填入新经验值；点击“应用经验值”才会使用该数值。'),
+    ('On records the first audience; off removes that record. Save to write the change.', '开启会记录首次觐见，关闭会移除该记录。保存后才会写入。'),
+    ('Checkbox applies immediately in memory, like other page actions.', '与本页其他操作一样，勾选后会立即应用到内存。'),
+    ('Fortuna has no first-audience condition in the game data; no flag is written.', '游戏数据中芙托娜没有首次觐见条件，不会写入标记。'),
+    ('EXP effect unknown; no Blessings-screen change reported at EXP 1 or 65535.', '经验值效果未知；据报告，经验值为 1 或 65535 时加护画面没有变化。'),
+    ('Select the currently owned tier to switch this Boon On or Off.', '选择当前拥有的等级，以启用或停用此祝福。'),
+    ('Select the owned tier to use Turn on/off.', '选择已拥有的等级后即可启用或停用。'),
+    ('Tier edits keep the current On/Off switch.', '修改等级会保留当前启用状态。'),
+    ('Editing does not spend Karma or change clears.', '编辑不会消耗因果碎片，也不会改变通关次数。'),
+    ('The game can clear these claims when it loads the edited save. The editor keeps the stored claim flags and Karma Shards unchanged.', '游戏加载修改后的存档时可能清除这些领取记录。编辑器会保留存档中的领取标记和因果碎片。'),
+    ('Search English, Japanese or hash. Add to save stores the selected records; the game controls menu visibility and can unlock tutorials again during play. Select shown uses the current filters; other entries stay saved. Unknown states are preserved.', '可搜索中文、英文、日文或哈希。“添加到存档”会保存所选记录；菜单显示由游戏决定，游戏过程中也可能再次解锁教程。“选择显示项”使用当前筛选条件，其他记录及未知状态会保留。'),
+    ('English title is provisional and absent from the supplied screenshots. If it appears during normal play, a title screenshot would help confirm it.', '英文标题为暂定名称，尚未见于所提供的截图；若在游戏中出现，可通过标题截图确认。'),
+    ('English title, category and order match the supplied in-game screenshots. This verifies the name, not feature unlocks or availability on every route.', '英文标题、类别和顺序与游戏截图一致；这只验证名称，不代表功能已解锁或所有路线均可使用。'),
+    ('Scenario-specific is an editor category, separate from Battle. These records are absent from the tested in-game Tutorials menus even when saved as 2. Whether they appear during their matching scenarios is unverified.', '特定剧情是编辑器的分类，与战斗分类分开。这些记录即使保存为 2，也未在测试过的游戏教程菜单中出现；是否会在对应剧情中出现尚未验证。'),
+    ('Enable/Disable changes only the selected saved switches. Enabling movement clears its restriction; area-unlock switches are separate. Route, story and NPC conditions may still limit access. Gate registrations are separate from ordinary fast travel.', '启用或禁用仅影响选中的存档开关。启用行动范围会清除其限制；区域解锁开关另行设置。路线、剧情和 NPC 条件仍可能限制进入。神殿大门登记与普通快速移动分别管理。'),
+    ('Stables stays unchanged unless selected. Uses the same-route mirroring selection. Ctrl+Z undoes; Ctrl+S saves.', '未选中马厩时不会更改马厩。遵循同路线存档同步设置。Ctrl+Z 撤销，Ctrl+S 保存。'),
+    ('Edit one activity total; it feeds every milestone for that activity. Claim rewards in game. The game can clear claimed rewards if their progress falls below target. Unlisted milestones may have game conditions.', '编辑某项活动的累计值会影响其全部里程碑。请在游戏中领取奖励；若进度低于目标，游戏可能清除已领取的奖励。未列出的里程碑可能有额外游戏条件。'),
+    ('Select a tier, then Set selected tier. Each Boon has one owned tier and an independent On/Off switch.', '选择等级后点击“设置所选等级”。每项祝福拥有一个等级和独立的启用开关。'),
+    ('Set all to max affects all 31 Boons, including rows hidden by search. Undo restores the whole edit.', '全部设为最高等级会影响全部 31 项祝福，包括搜索隐藏的项目。撤销可还原整次修改。'),
+    ('Uses the same-route mirroring selection. Ctrl+S saves, Ctrl+Z undoes, Ctrl+Y redoes.', '遵循同路线存档同步设置。Ctrl+S 保存，Ctrl+Z 撤销，Ctrl+Y 重做。'),
+    ('Uses the same-route mirroring selection.', '遵循同路线存档同步设置。'),
+    ('Ctrl+Z undoes an edit; Ctrl+S writes it.', '按 Ctrl+Z 撤销，按 Ctrl+S 保存。'),
+    ('Stored state does not guarantee menu visibility in every context, and adding a tutorial does not unlock the feature it describes.', '存储状态不保证教程在所有情况下出现在菜单中；添加教程不会解锁其介绍的功能。'),
+    ('Tier edits preserve Karma and progression. Set all to max preserves each On/Off switch.', '修改等级不会改变因果碎片和游戏进度。全部设为最高等级会保留各项的启用状态。'),
+    ('Inferred', '推测'), ('Game-tested', '游戏内已测试'),
+])
+
+
 def set_language(language: str) -> None:
     global _language
     _language = language if language in LANGUAGES else "en"

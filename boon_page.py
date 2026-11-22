@@ -1,5 +1,6 @@
 """Selected-save Boon tier and activation controls."""
 from tkinter import ttk
+import i18n
 
 import boons
 import fefw_core as core
@@ -138,7 +139,7 @@ class BoonPageMixin:
             note = (f"Owned tier: {level} of {len(group['tiers'])}. Tier edits keep the current On/Off switch. "
                     "Select the owned tier to use Turn on/off.")
         self.boon_detail.configure(text=(
-            f"{boons.display_name(group)} · selected tier {tier['tier']} · value {tier['value']}\n"
+            f"{i18n.tr(boons.display_name(group))} · selected tier {tier['tier']} · value {tier['value']}\n"
             f"Normal purchase: {tier['cost']} Karma, {tier['clear_count']} required clears (game data). "
             "Editing does not spend Karma or change clears.\n" + note))
 

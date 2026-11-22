@@ -163,10 +163,11 @@ def edited_weapons_active(f: core.SaveFile, active: bool) -> bytearray:
 
 
 def matching_rows(query: str = "") -> list[tuple[str, dict, dict]]:
+    import i18n
     query = query.strip().casefold()
     return [(f"{i}:{tier['tier']}", group, tier)
             for i, group in enumerate(catalog()) for tier in group["tiers"]
-            if not query or query in f"{group['label']} {group['name']} {group.get('game_label', '')}".casefold()]
+            if not query or query in f"{group['label']} {group['name']} {group.get('game_label', '')} {i18n.tr(display_name(group))}".casefold()]
 
 
 def display_name(group: dict) -> str:
